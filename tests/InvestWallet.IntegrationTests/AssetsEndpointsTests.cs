@@ -68,4 +68,35 @@ public class AssetsEndpointsTests : ApiTestBase
         Assert.True(errors.TryGetProperty("name", out _));
         Assert.True(errors.TryGetProperty("type", out _));
     }
+
+    [Fact]
+    public async Task Get_de_ativo_inexistente_devolve_404()
+    {
+        Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync($"/api/assets/{Guid.NewGuid()}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Delete_de_ativo_sem_transacoes_devolve_204_e_depois_404()
+    {
+        var asset = await CreateAssetAsync();
+
+        var delete = await Client.DeleteAsync($"/api/assets/{asset.Id}");
+        var get = await Client.GetAsync($"/api/assets/{asset.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);
+    }
+
+    [Fact]
+    public async Task Lista_vem_ordenada_por_ticker_e_paginada()
+    {
+        var prefix = "ZZ" + Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+        foreach (var suffix in new[] { "C", "A", "B" }) await CreateAssetAsync(prefix + suffix);
+
+        var page = await ReadAsync<InvestWallet.Application.Common.PagedResult<AssetResponse>>(
+            await Client.GetAsync("/api/assets?page=1&pageSize=100"));
+
+        var mine = page.Items.Where(a => a.Ticker.StartsWith(prefix)).Select(a => a.Ticker).ToList();
+        Assert.Equal([prefix + "A", prefix + "B", prefix + "C"], mine);
+    }
 }

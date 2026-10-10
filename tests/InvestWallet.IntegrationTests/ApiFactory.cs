@@ -16,6 +16,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     // Mesma versão do PostgreSQL usada no docker-compose.yml: o teste roda no banco que roda em produção
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine").Build();
 
+    /// <summary>Connection string do container (útil para testes que criam bancos próprios).</summary>
+    public string ConnectionString => _postgres.GetConnectionString();
+
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
