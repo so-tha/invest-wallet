@@ -41,7 +41,7 @@ Legenda: ✅ atendido e verificado · 🟡 parcial ou preparado, mas não exerci
 | Uma linguagem backend + um framework frontend | 🟡 | C#/.NET ✅; frontend ❌. |
 | SQL e modelagem relacional básica | ✅ | Esquema normalizado, chaves, índices, restrições, transações, advisory lock. |
 | Git e PR/code review | 🟡 | Git ✅; PR não exercitado (ver acima). |
-| Testes automatizados básicos | ✅ | 162 testes, cobertura de linhas ~99% (medida antes dos últimos testes do limpador; ver nota). |
+| Testes automatizados básicos | ✅ | 162 testes, cobertura de linhas 98,9% (medida, sem código gerado). |
 | Leitura de documentação técnica em inglês | n/a | Não verificável em repositório. |
 
 ## 3. Diferenciais
@@ -67,7 +67,7 @@ Legenda: ✅ atendido e verificado · 🟡 parcial ou preparado, mas não exerci
 | Clone limpo → testes | 71 unitários + 47 de integração, todos passando (a suíte cresceu depois desta verificação; ver a linha da suíte final) |
 | Clone limpo → roteiro do README (`docker compose up --build`) | API e banco `healthy`; exemplo do README devolve 201, posição correta (10 a 35,5) e 422 |
 | Suíte final em Release com `-warnaserror` | 74 unitários + 88 de integração, todos passando |
-| Cobertura de linhas (unitários + integração somados, sem código gerado: migrations e regex gerado) | **98,9%** de 703 linhas (Api 98,0 · Application 100 · Domain 98,0 · Infrastructure 99,3). Contando o regex gerado: 93,5% de 1003 linhas |
+| Cobertura de linhas (unitários + integração somados, sem código gerado: migrations e regex gerado) | **98,9%** de 808 linhas (Api 98,0 · Application 100 · Domain 98,2 · Infrastructure 99,4). Contando os regex gerados: 89,6% de 1370 linhas |
 | Mutações manuais (quebrar de propósito e ver o teste falhar) | 6 execuções, todas detectadas: trava de concorrência, ordenação cronológica, tradução de erro de unicidade, documentação (2 alterações de uma vez), vazamento de mensagem no 500 e Sentry (limpador de segredos e filtro de exceção removidos de uma vez) |
 | Segredos versionados | nenhum (`.env` ignorado; `.env.example` sem segredos reais) |
 

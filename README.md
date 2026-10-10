@@ -130,7 +130,7 @@ dotnet test tests/InvestWallet.IntegrationTests  # sobem um PostgreSQL descartá
 - Os testes de integração **não** usam o banco do `docker compose`: cada execução cria e destrói o próprio container, com as migrations reais.
 - Cobrem fluxos completos, formato de erro, paginação, fusos horários e **corridas reais** (8 vendas simultâneas sobre saldo 20: exatamente 2 passam; 8 criações do mesmo ticker: 1 criada, 7 conflitos).
 - Há testes de **contrato** sobre o `swagger.json`: o documento é válido, expõe exatamente os endpoints planejados e documenta todas as respostas, então a documentação não envelhece em silêncio.
-- Cobertura de linhas medida: **98,9%** (somando as duas suítes, sem código gerado: migrations e o regex gerado pelo compilador; com o regex gerado incluído, 93,5%). Como cobertura só mostra o que foi *executado*, a eficácia dos testes foi verificada quebrando proteções de propósito (trava de concorrência, ordenação cronológica, tradução de erros, documentação, vazamento no 500) e confirmando que os testes certos falham.
+- Cobertura de linhas medida: **98,9%** (somando as duas suítes, sem código gerado: migrations e o regex gerado pelo compilador; contando os regex gerados, 89,6%). Como cobertura só mostra o que foi *executado*, a eficácia dos testes foi verificada quebrando proteções de propósito (trava de concorrência, ordenação cronológica, tradução de erros, documentação, vazamento no 500) e confirmando que os testes certos falham.
 
 ## CI (GitHub Actions)
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda a cada push/PR para `main`:
