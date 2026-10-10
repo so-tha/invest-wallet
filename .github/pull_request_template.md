@@ -9,5 +9,5 @@
 - [ ] Regras novas têm testes (unitários e, se tocam banco/HTTP, de integração)
 - [ ] Endpoint novo ou alterado: Swagger atualizado (resumo, exemplos, respostas de erro)
 - [ ] Mudança de esquema: migration criada e revisada
-- [ ] Decisão de arquitetura relevante: ADR em `docs/adr/`
+- [ ] Decisão de arquitetura relevante: registrada no README, seção "Decisões de arquitetura"
 - [ ] Nada sensível (senhas, tokens, dados pessoais) em código ou logs

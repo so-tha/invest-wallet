@@ -28,7 +28,7 @@ try
         .ReadFrom.Services(services)
         .Enrich.FromLogContext());
 
-    // Sentry: rastreamento de erros (docs/adr/0006). O DSN vem de "Sentry:Dsn" (variável Sentry__Dsn);
+    // Sentry: rastreamento de erros (veja o README). O DSN vem de "Sentry:Dsn" (variável Sentry__Dsn);
     // SEM DSN o SDK fica desativado e nada sai da aplicação (desenvolvimento, testes e CI).
     builder.WebHost.UseSentry(options =>
     {
@@ -108,7 +108,7 @@ try
     var app = builder.Build();
 
     // Em containers não há um "dotnet ef" à mão: com a flag ligada, a própria API cria/atualiza o esquema ao subir.
-    // Desligada por padrão: em produção real, quem altera o banco deve ser uma decisão de deploy (docs/adr/0004).
+    // Desligada por padrão: em produção real, quem altera o banco deve ser uma decisão de deploy (veja o README).
     if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
         await app.Services.MigrateDatabaseAsync();
 

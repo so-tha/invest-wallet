@@ -5,7 +5,7 @@ using Npgsql;
 
 namespace InvestWallet.IntegrationTests;
 
-/// <summary>Garante o comportamento descrito no ADR 0004 (migrations na subida), antes verificado só à mão.</summary>
+/// <summary>Garante o comportamento de aplicar migrations na subida (README: "Decisões de arquitetura"), antes verificado só à mão.</summary>
 [Collection(ApiCollection.Name)]
 public class MigrationTests
 {

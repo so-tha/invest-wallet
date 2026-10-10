@@ -485,3 +485,7 @@ $RECYCLE.BIN/
 
 # Segredos locais
 .env
+
+# Material pessoal de estudo (fica só no seu computador, fora do repositório)
+docs/
+PROGRESSO.md

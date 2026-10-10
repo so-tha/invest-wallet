@@ -110,16 +110,15 @@ src/
 tests/
   InvestWallet.UnitTests/         74 testes, sem banco
   InvestWallet.IntegrationTests/  88 testes: API real + PostgreSQL descartável
-docs/                           requisitos, modelo de dados, endpoints, ADRs, guia de estudo
 ```
 
-### Decisões de arquitetura (ADRs em [`docs/adr`](docs/adr))
-1. [Camadas e stack](docs/adr/0001-camadas-e-stack.md)
-2. [Posição derivada do histórico, não armazenada](docs/adr/0002-posicao-derivada-do-historico.md)
-3. [Concorrência com advisory lock do PostgreSQL](docs/adr/0003-concorrencia-com-advisory-lock.md)
-4. [Migrations aplicadas na subida, atrás de uma flag](docs/adr/0004-migrations-na-subida-da-aplicacao.md)
-5. [Convenção de códigos de erro HTTP](docs/adr/0005-codigos-de-erro-http.md)
-6. [Rastreamento de erros com Sentry (opcional)](docs/adr/0006-rastreamento-de-erros-com-sentry.md)
+### Decisões de arquitetura
+- **Camadas** (Domain / Application / Infrastructure / Api), com as dependências apontando para o núcleo: as regras de negócio são testadas sem banco nem HTTP. Alternativa descartada: projeto único (mais simples, mas sem essa separação).
+- **A posição não é armazenada**: é calculada do histórico de transações por uma função pura. Não há segunda fonte da verdade que possa divergir. Custo: cresce com o histórico; se medições mostrarem lentidão, evoluir para *snapshots* gravados na mesma transação de banco.
+- **Concorrência**: validar saldo é "ler e depois gravar", então duas vendas simultâneas poderiam passar juntas (reproduzido: 6 vendas de 10 sobre saldo 20 passaram todas). Solução: transação de banco com `pg_advisory_xact_lock` por (carteira, ativo), que serializa só o que conflita. Acopla a solução ao PostgreSQL.
+- **Códigos de erro**: 400 se a requisição é inválida olhando só para ela (e o relógio); 404 se o recurso da URL não existe; 409 se conflita com o estado atual (inclui corridas decididas pelo índice único do banco); 422 se viola uma regra de negócio que depende de estado; 500 com mensagem genérica e `traceId`.
+- **Migrations na subida, atrás de uma flag** (`Database__MigrateOnStartup`), para o `docker compose up` funcionar de ponta a ponta. Serve a uma instância; com várias réplicas, usar um passo de deploy dedicado (bundle de migrations ou script SQL).
+- **Rastreamento de erros com Sentry, opcional** (veja abaixo): adotar uma ferramenta pronta em vez de construir tudo; só 500; sem dados pessoais.
 
 ## Testes
 ```bash
@@ -154,7 +153,7 @@ Para ver um erro chegar: `docker compose stop db`, chame `GET /api/wallets` (res
 - **Só erros 500** vão para o Sentry; 400, 404, 409 e 422 são comportamento esperado e ficam de fora.
 - **Não vão:** corpo de requisição, cookies, cabeçalhos de autenticação, IP, o nome da máquina (`server_name` e `SERVER_NAME` viram `investwallet-api`) nem o seu usuário do sistema (caminhos como `/home/ana/...` viram `~/...`, nos stack frames e nas imagens de debug). Trechos como `Password=...` ou `Authorization: Bearer ...` em mensagens de exceção são removidos antes do envio.
 - **Ainda vai** um identificador anônimo de instalação (`user.id`, um UUID gerado pelo SDK e gravado em `~/.local/share/Sentry`) e o `release` com o hash do commit.
-- O comportamento é coberto por testes **sem rede** (transporte simulado) e foi **verificado com envio real** (ver `docs/REVISAO-FINAL.md`). A entrega real não é testada no CI, pois depende de um DSN. Decisão em [ADR 0006](docs/adr/0006-rastreamento-de-erros-com-sentry.md).
+- O comportamento é coberto por testes **sem rede** (transporte simulado) e foi **verificado com envio real** (3 eventos reais de teste). A entrega real não é testada no CI, pois depende de um DSN. Decisão em [ADR 0006](docs/adr/0006-rastreamento-de-erros-com-sentry.md).
 
 ## Configuração
 | Variável | Para quê | Padrão |
@@ -168,10 +167,6 @@ Para ver um erro chegar: `docker compose stop db`, chame `GET /api/wallets` (res
 - **Sem HTTPS, CORS e rate limiting** configurados (esperado atrás de um proxy/ingress; necessários para uso real e para um frontend).
 - **Sem autenticação/autorização** na v1: o foco foi o domínio e a qualidade do CRUD. Esconder o Swagger não é proteção; qualquer uso real exige autenticação (JWT/OIDC) e dados por usuário.
 - **Segredos no compose:** a senha do banco aparece na connection string do container (`docker inspect`). Adequado para desenvolvimento; em produção, use um gerenciador de segredos.
-- **Migrations na subida** servem a uma instância; com várias réplicas, usar um passo de deploy dedicado (ver ADR 0004).
-- **Posição calculada na hora:** correto e simples; se o histórico por carteira crescer muito, evoluir para *snapshots* (ver ADR 0002).
+- **Migrations na subida** servem a uma instância; com várias réplicas, usar um passo de deploy dedicado (ver "Decisões de arquitetura").
+- **Posição calculada na hora:** correto e simples; se o histórico por carteira crescer muito, evoluir para *snapshots* (ver "Decisões de arquitetura").
 - **Frontend e testes E2E (Playwright)** ficam para uma segunda fase; integração com LLM (extração de nota de corretagem, com fallback e limite de custo) é uma extensão natural.
-
-## Documentação do projeto
-- [`docs/REVISAO-FINAL.md`](docs/REVISAO-FINAL.md): cruza o projeto com cada item da vaga e diz com franqueza o que **não** foi feito.
-- [`docs/ESTUDO.md`](docs/ESTUDO.md): roteiro de apresentação, conceitos, decisões e perguntas de entrevista com respostas-guia.

@@ -25,7 +25,7 @@ services:
     environment:
       # Dentro da rede do Compose o banco é alcançado pelo nome do serviço ("db"), não por "localhost"
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
-      Database__MigrateOnStartup: "true"   # cria/atualiza as tabelas ao subir (docs/adr/0004)
+      Database__MigrateOnStartup: "true"   # cria/atualiza as tabelas ao subir (veja o README)
       Swagger__Enabled: "true"             # expõe /swagger para quem for avaliar o projeto
       Sentry__Dsn: "${SENTRY_DSN:-}"        # opcional: vazio = Sentry desativado (nada sai da aplicação)
     ports:

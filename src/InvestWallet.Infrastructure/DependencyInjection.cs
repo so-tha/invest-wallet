@@ -35,7 +35,7 @@ public static class DependencyInjection
 
     /// <summary>
     /// Aplica as migrations pendentes. Chamado na subida da aplicação quando <c>Database:MigrateOnStartup=true</c>
-    /// (veja docs/adr/0004). Seguro para uma única instância; com várias réplicas, prefira um passo de deploy separado.
+    /// (veja o README). Seguro para uma única instância; com várias réplicas, prefira um passo de deploy separado.
     /// </summary>
     public static async Task MigrateDatabaseAsync(this IServiceProvider services, CancellationToken ct = default)
     {
