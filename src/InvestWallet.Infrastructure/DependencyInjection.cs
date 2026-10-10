@@ -23,6 +23,9 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString)
                    .UseSnakeCaseNamingConvention()); // Wallet.CreatedAt -> created_at
 
+        // Verificação de "prontidão": executa uma consulta mínima no banco (tag "ready", usada por /health/ready)
+        services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);
+
         services.AddScoped<IWalletRepository, WalletRepository>();
         services.AddScoped<IAssetRepository, AssetRepository>();
         services.AddScoped<ITransactionRepository, TransactionRepository>();

@@ -3,6 +3,7 @@ using InvestWallet.Api.Middleware;
 using InvestWallet.Api.Swagger;
 using InvestWallet.Application;
 using InvestWallet.Infrastructure;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
 using Serilog.Context;
@@ -116,7 +117,10 @@ try
     app.UseAuthorization();
 
     app.MapControllers();
-    app.MapHealthChecks("/health");
+    // Liveness: "o processo está de pé?" Não consulta nada; é o que o Docker usa para decidir reiniciar.
+    app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
+    // Readiness: "consigo atender requisições agora?" Inclui o banco; devolve 503 se algum check falhar.
+    app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
     app.Run();
 }
