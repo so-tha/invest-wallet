@@ -153,7 +153,7 @@ Para ver um erro chegar: `docker compose stop db`, chame `GET /api/wallets` (res
 - **Só erros 500** vão para o Sentry; 400, 404, 409 e 422 são comportamento esperado e ficam de fora.
 - **Não vão:** corpo de requisição, cookies, cabeçalhos de autenticação, IP, o nome da máquina (`server_name` e `SERVER_NAME` viram `investwallet-api`) nem o seu usuário do sistema (caminhos como `/home/ana/...` viram `~/...`, nos stack frames e nas imagens de debug). Trechos como `Password=...` ou `Authorization: Bearer ...` em mensagens de exceção são removidos antes do envio.
 - **Ainda vai** um identificador anônimo de instalação (`user.id`, um UUID gerado pelo SDK e gravado em `~/.local/share/Sentry`) e o `release` com o hash do commit.
-- O comportamento é coberto por testes **sem rede** (transporte simulado) e foi **verificado com envio real** (3 eventos reais de teste). A entrega real não é testada no CI, pois depende de um DSN. Decisão em [ADR 0006](docs/adr/0006-rastreamento-de-erros-com-sentry.md).
+- O comportamento é coberto por testes **sem rede** (transporte simulado) e foi **verificado com envio real** (3 eventos reais de teste). A entrega real não é testada no CI, pois depende de um DSN.
 
 ## Configuração
 | Variável | Para quê | Padrão |
