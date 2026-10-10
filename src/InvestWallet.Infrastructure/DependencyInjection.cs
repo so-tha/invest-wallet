@@ -1,4 +1,7 @@
+using InvestWallet.Application.Assets;
+using InvestWallet.Application.Wallets;
 using InvestWallet.Infrastructure.Persistence;
+using InvestWallet.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +20,9 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(connectionString)
                    .UseSnakeCaseNamingConvention()); // Wallet.CreatedAt -> created_at
+
+        services.AddScoped<IWalletRepository, WalletRepository>();
+        services.AddScoped<IAssetRepository, AssetRepository>();
 
         return services;
     }

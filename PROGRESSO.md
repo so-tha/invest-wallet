@@ -26,9 +26,9 @@
 - [x] 0. Análise da vaga e planejamento (docs/)
 - [x] 1. Setup: solução, projetos, Git, Docker Compose, configuração
 - [x] 2. Banco de dados: entidades, DbContext, migration inicial
-- [ ] 3. CRUD de Carteiras e Ativos
+- [x] 3. CRUD de Carteiras e Ativos
 - [ ] 4. Transações + regras de negócio (compra/venda, posição, preço médio)
-- [ ] 5. Validações e tratamento de erros padronizado (ProblemDetails)
+- [ ] 5. Validações (FluentValidation → 400) e refinar erros. *(GlobalExceptionHandler com ProblemDetails já feito na etapa 3)*
 - [ ] 6. Logs estruturados
 - [ ] 7. Testes automatizados (unitários + integração)
 - [ ] 8. Swagger/OpenAPI documentado
@@ -37,7 +37,7 @@
 - [ ] 11. Revisão final e docs/ESTUDO.md
 
 ## Próxima etapa
-Etapa 3: CRUD de Carteiras e Ativos (DTOs, serviços, controllers).
+Etapa 4: Transações + regras de negócio (compra/venda, posição, preço médio).
 
 ## Decisões e suposições
 - PostgreSQL em Docker (a vaga não especifica banco) — suposição.
@@ -49,3 +49,6 @@ Etapa 3: CRUD de Carteiras e Ativos (DTOs, serviços, controllers).
 - `.env` com `;` sem aspas quebrou `source .env` (o shell tratou `;` como separador) → valor entre aspas. O `/health` não detectou porque não toca no banco.
 - `dotnet ef migrations script --no-build` usou binário antigo e saiu sem as tabelas → rodar sem `--no-build` logo após criar a migration.
 - zsh não divide variável com espaços em palavras (`$P cmd args`) → usar função shell.
+- Adiantei o `GlobalExceptionHandler` (404/409/422/500) para a etapa 3, senão "não encontrado" viraria 500 e não daria para testar.
+- Pendências para a etapa 5: validação de campo (nome vazio, ticker vazio) hoje devolve 422 e deve ser 400; mensagem de enum inválido ("Banana") ficou confusa; capturar `DbUpdateException` de unicidade (corrida entre dois POSTs com o mesmo ticker).
+- `createdAt` da resposta do POST tem 7 casas decimais de segundo e o banco guarda 6 (microssegundos) → GET devolve ligeiramente diferente. Inofensivo; truncar no domínio se incomodar.
