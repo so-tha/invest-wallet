@@ -24,7 +24,7 @@
 
 ## Etapas
 - [x] 0. Análise da vaga e planejamento (docs/)
-- [ ] 1. Setup: solução, projetos, Git, Docker Compose, configuração
+- [x] 1. Setup: solução, projetos, Git, Docker Compose, configuração
 - [ ] 2. Banco de dados: entidades, DbContext, migration inicial
 - [ ] 3. CRUD de Carteiras e Ativos
 - [ ] 4. Transações + regras de negócio (compra/venda, posição, preço médio)
@@ -37,7 +37,7 @@
 - [ ] 11. Revisão final e docs/ESTUDO.md
 
 ## Próxima etapa
-Etapa 1: Setup do projeto.
+Etapa 2: Banco de dados (entidades, DbContext, migration inicial).
 
 ## Decisões e suposições
 - PostgreSQL em Docker (a vaga não especifica banco) — suposição.
@@ -45,4 +45,4 @@ Etapa 1: Setup do projeto.
 - Frontend e E2E ficam para a fase 2 — Playwright precisa de interface.
 
 ## Problemas encontrados
-(nenhum ainda)
+- `pkill -f` com nome do projeto matou o próprio shell (a linha de comando continha o padrão) → usar `pgrep` + `kill <pid>` ou guardar o PID.
