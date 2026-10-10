@@ -109,7 +109,7 @@ src/
   InvestWallet.Api/             controllers, tratamento de erros, Swagger, Serilog
 tests/
   InvestWallet.UnitTests/         74 testes, sem banco
-  InvestWallet.IntegrationTests/  88 testes: API real + PostgreSQL descartável
+  InvestWallet.IntegrationTests/  139 testes: API real + PostgreSQL descartável
 ```
 
 ### Decisões de arquitetura
@@ -119,6 +119,7 @@ tests/
 - **Códigos de erro**: 400 se a requisição é inválida olhando só para ela (e o relógio); 404 se o recurso da URL não existe; 409 se conflita com o estado atual (inclui corridas decididas pelo índice único do banco); 422 se viola uma regra de negócio que depende de estado; 500 com mensagem genérica e `traceId`.
 - **Migrations na subida, atrás de uma flag** (`Database__MigrateOnStartup`), para o `docker compose up` funcionar de ponta a ponta. Serve a uma instância; com várias réplicas, usar um passo de deploy dedicado (bundle de migrations ou script SQL).
 - **Rastreamento de erros com Sentry, opcional** (veja abaixo): adotar uma ferramenta pronta em vez de construir tudo; só 500; sem dados pessoais.
+- **Aviso de erros 500 como issues do GitHub, opcional** (veja abaixo): a alternativa "construir", atrás de uma interface (`IIssueTracker`) para trocar o destino sem mexer no resto.
 
 ## Testes
 ```bash
@@ -129,7 +130,7 @@ dotnet test tests/InvestWallet.IntegrationTests  # sobem um PostgreSQL descartá
 - Os testes de integração **não** usam o banco do `docker compose`: cada execução cria e destrói o próprio container, com as migrations reais.
 - Cobrem fluxos completos, formato de erro, paginação, fusos horários e **corridas reais** (8 vendas simultâneas sobre saldo 20: exatamente 2 passam; 8 criações do mesmo ticker: 1 criada, 7 conflitos).
 - Há testes de **contrato** sobre o `swagger.json`: o documento é válido, expõe exatamente os endpoints planejados e documenta todas as respostas, então a documentação não envelhece em silêncio.
-- Cobertura de linhas medida: **98,9%** (somando as duas suítes, sem código gerado: migrations e o regex gerado pelo compilador; contando os regex gerados, 89,6%). Como cobertura só mostra o que foi *executado*, a eficácia dos testes foi verificada quebrando proteções de propósito (trava de concorrência, ordenação cronológica, tradução de erros, documentação, vazamento no 500) e confirmando que os testes certos falham.
+- Cobertura de linhas medida em Release (a configuração do CI): **99,0%** de 961 linhas (somando as duas suítes, sem código gerado: migrations e os regex gerados pelo compilador; contando os regex gerados, 93,0%). Como cobertura só mostra o que foi *executado*, a eficácia dos testes foi verificada quebrando proteções de propósito (trava de concorrência, ordenação cronológica, tradução de erros, documentação, vazamento no 500) e confirmando que os testes certos falham.
 
 ## CI (GitHub Actions)
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda a cada push/PR para `main`:
@@ -155,6 +156,31 @@ Para ver um erro chegar: `docker compose stop db`, chame `GET /api/wallets` (res
 - **Ainda vai** um identificador anônimo de instalação (`user.id`, um UUID gerado pelo SDK e gravado em `~/.local/share/Sentry`) e o `release` com o hash do commit.
 - O comportamento é coberto por testes **sem rede** (transporte simulado) e foi **verificado com envio real** (3 eventos reais de teste). A entrega real não é testada no CI, pois depende de um DSN.
 
+## Aviso de erros como issues do GitHub (opcional)
+Cada **erro 500** pode virar uma issue no repositório que você escolher, sem enxurrada de duplicatas:
+
+```
+500 ─► GlobalExceptionHandler ─► fila em memória ─► worker em segundo plano ─► GitHub
+         (só enfileira, não bloqueia)                 (agrupa, tenta de novo, nunca derruba a API)
+```
+- **Impressão digital do erro** = tipo da exceção + ponto do *nosso* código + verbo + **padrão** da rota (`api/wallets/{id}`, não o id real). O mesmo bug em carteiras diferentes é um só erro.
+- **Sem duplicatas:** a issue recebe um label `error-fp:<impressão digital>`. Antes de criar, o adaptador busca por esse label: se existe **aberta**, comenta; se existe **fechada**, **reabre** e comenta como regressão (o GitHub é a fonte da verdade, então reiniciar a API não duplica). Pull requests, que a API de issues devolve misturados, são ignorados.
+- **Agrupamento:** repetições do mesmo erro dentro de `CooldownMinutes` não geram chamadas; o próximo aviso informa quantas foram agrupadas.
+- **Resiliência:** falha do GitHub (rede, 5xx, limite de requisições) é repetida com espera crescente; falha permanente (token inválido, repositório inexistente) é registrada no log, com a dica do que verificar, e não é repetida. **Nada disso afeta a resposta ao cliente.**
+- **Conteúdo seguro:** segredos conhecidos (`Password=`, `token=`, `Authorization: Bearer ...`) e o diretório do usuário do sistema saem do texto; o token do GitHub nunca vai no conteúdo; sem corpo de requisição.
+
+Para ativar, crie um **token fine-grained** só para o repositório (permissão *Issues: Read and write*) e coloque no seu `.env`, que o Git ignora:
+```bash
+ISSUE_TRACKING_PROVIDER=GitHub
+GITHUB_ISSUES_OWNER=seu-usuario
+GITHUB_ISSUES_REPO=invest-wallet
+GITHUB_ISSUES_TOKEN=github_pat_...
+```
+Para ver funcionar: `docker compose up --build`, depois `docker compose stop db` e `GET /api/wallets` (500). Uma issue aparece com o `traceId` da resposta. Reinicie o banco com `docker compose start db`.
+
+**Estado da verificação:** o comportamento é coberto por testes com um GitHub **simulado** (criar, comentar, reabrir, PRs, classificação de falhas, cooldown, retentativas, e o fluxo completo a partir de um 500 real). O formato da busca de issues foi conferido contra a API real do GitHub apenas em **leitura** (repositório público, sem autenticação). **Criar, comentar e reabrir de verdade ainda não foram exercitados** (sem repositório e token neste ambiente).
+Limitação: a fila é **em memória**; se o processo cair, os avisos pendentes se perdem. Para durabilidade, o passo seguinte seria um broker (RabbitMQ, Azure Service Bus).
+
 ## Configuração
 | Variável | Para quê | Padrão |
 |---|---|---|
@@ -162,6 +188,9 @@ Para ver um erro chegar: `docker compose stop db`, chame `GET /api/wallets` (res
 | `Database__MigrateOnStartup` | Aplica migrations ao subir | `false` (o compose liga) |
 | `Swagger__Enabled` | Expõe o Swagger fora de Development | `false` (o compose liga) |
 | `Sentry__Dsn` (no compose: `SENTRY_DSN`) | Ativa o rastreamento de erros no Sentry | vazio = desativado |
+| `IssueTracking__Provider` (no compose: `ISSUE_TRACKING_PROVIDER`) | `None` ou `GitHub`: avisa os erros 500 como issues | `None` (desligado) |
+| `IssueTracking__GitHub__Owner` / `__Repo` / `__Token` | Repositório de destino e token (segredo). Obrigatórios com `GitHub`: sem eles a API **recusa iniciar** e diz o que falta | (vazio) |
+| `IssueTracking__CooldownMinutes` | Intervalo mínimo entre avisos do mesmo erro | `10` |
 
 ## Limitações conhecidas e próximos passos
 - **Sem HTTPS, CORS e rate limiting** configurados (esperado atrás de um proxy/ingress; necessários para uso real e para um frontend).

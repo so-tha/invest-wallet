@@ -142,6 +142,32 @@ public class ErrorReportingEndToEndTests
         Assert.Equal(HttpStatusCode.InternalServerError, second.StatusCode);
     }
 
+    private sealed class ExplodingReporter : IErrorReporter
+    {
+        public bool TryReport(ErrorReport report) => throw new InvalidOperationException("a fila quebrou");
+    }
+
+    [Fact]
+    public async Task Se_ate_enfileirar_o_aviso_falhar_a_resposta_ao_cliente_continua_sendo_o_500_normal()
+    {
+        using var client = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IWalletRepository>();
+            services.AddScoped<IWalletRepository, BrokenWalletRepository>();
+            services.RemoveAll<IErrorReporter>();
+            services.AddSingleton<IErrorReporter, ExplodingReporter>();
+        })).CreateClient();
+
+        var response = await client.GetAsync("/api/wallets");
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        // Avisar é um extra: a falha dele não pode trocar o 500 limpo por outra coisa nem vazar o motivo
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
+        Assert.Equal(500, problem.GetProperty("status").GetInt32());
+        Assert.DoesNotContain("a fila quebrou", await response.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public void Por_padrao_o_aviso_de_erros_esta_desligado_e_nada_e_registrado()
     {

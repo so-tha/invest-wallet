@@ -164,6 +164,18 @@ public class GitHubIssueTrackerTests
     }
 
     [Fact]
+    public async Task Tempo_esgotado_do_HttpClient_e_transitorio_e_diferente_de_cancelamento()
+    {
+        // O HttpClient sinaliza timeout com TaskCanceledException, mesmo sem o token do chamador ter sido cancelado
+        _github.Responder = _ => throw new TaskCanceledException("timeout");
+
+        var ex = await Assert.ThrowsAsync<IssueTrackerException>(() => _tracker.ReportAsync(Report, 0, default));
+
+        Assert.True(ex.IsTransient);
+        Assert.Contains("Tempo esgotado", ex.Message);
+    }
+
+    [Fact]
     public async Task Falha_de_rede_e_transitoria()
     {
         _github.Responder = _ => throw new HttpRequestException("conexão recusada");

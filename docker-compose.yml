@@ -28,6 +28,11 @@ services:
       Database__MigrateOnStartup: "true"   # cria/atualiza as tabelas ao subir (veja o README)
       Swagger__Enabled: "true"             # expõe /swagger para quem for avaliar o projeto
       Sentry__Dsn: "${SENTRY_DSN:-}"        # opcional: vazio = Sentry desativado (nada sai da aplicação)
+      # Aviso de erros 500 como issues do GitHub (opcional). "None" = desligado; com "GitHub" os três valores abaixo são obrigatórios
+      IssueTracking__Provider: "${ISSUE_TRACKING_PROVIDER:-None}"
+      IssueTracking__GitHub__Owner: "${GITHUB_ISSUES_OWNER:-}"
+      IssueTracking__GitHub__Repo: "${GITHUB_ISSUES_REPO:-}"
+      IssueTracking__GitHub__Token: "${GITHUB_ISSUES_TOKEN:-}"
     ports:
       - "${API_PORT:-8080}:8080"
     healthcheck:
