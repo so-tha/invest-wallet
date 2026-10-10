@@ -30,14 +30,14 @@
 - [x] 4. Transações + regras de negócio (compra/venda, posição, preço médio)
 - [x] 5. Validações (FluentValidation → 400) e refinar erros. *(GlobalExceptionHandler com ProblemDetails já feito na etapa 3)*
 - [x] 6. Logs estruturados
-- [ ] 7. Testes automatizados (unitários + integração)
+- [x] 7. Testes automatizados (unitários + integração)
 - [ ] 8. Swagger/OpenAPI documentado
 - [ ] 9. README, Dockerfile da API, GitHub Actions
 - [ ] 10. (Opcional) Importar nota de corretagem via LLM com fallback
 - [ ] 11. Revisão final e docs/ESTUDO.md
 
 ## Próxima etapa
-Etapa 7: Testes automatizados (unitários dos serviços/validadores + integração dos endpoints com Postgres de teste).
+Etapa 8: Swagger/OpenAPI documentado (descrições, exemplos, enums, respostas de erro).
 
 ## Decisões e suposições
 - PostgreSQL em Docker (a vaga não especifica banco) — suposição.
@@ -60,3 +60,6 @@ Etapa 7: Testes automatizados (unitários dos serviços/validadores + integraç�
 - Para a etapa 6: o EF registra em nível `fail` os erros de unicidade que depois viram 409 (ruído no log); ajustar o nível da categoria `Microsoft.EntityFrameworkCore.Update`.
 - Etapa 6 concluída: Serilog (texto em Development, JSON nos demais ambientes), `TraceId` W3C em toda linha e na resposta de erro, log de negócio na criação/remoção de transações. Provado: banco derrubado → 500 com traceId → 4 linhas no log com o mesmo id.
 - Para a etapa 7: `Program` precisa ser `public partial` para o `WebApplicationFactory`; os validadores e `TransactionService` (agora com `ILogger`) pedem testes; usar `NullLogger<T>` e `FakeTimeProvider`.
+- Etapa 7 concluída: 71 testes unitários + 38 de integração (Testcontainers/PostgreSQL), todos passando. 3 mutações manuais detectadas (trava de concorrência, ordenação cronológica, tradução de erro de unicidade).
+- Pendência: não medi cobertura de código (o `coverlet.collector` já está nos projetos de teste); E2E com Playwright fica para a fase 2 com o frontend.
+- Para a etapa 9 (CI): os testes de integração precisam de Docker; os runners `ubuntu-latest` do GitHub Actions já têm.

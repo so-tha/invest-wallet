@@ -70,6 +70,21 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 ### P20. O que não se deve registrar em log, e que níveis usar? 🟢 (etapa 6)
 **Resposta-guia:** Nunca registrar segredos (senhas, tokens, connection strings), dados pessoais/sensíveis (LGPD) nem corpos de requisição inteiros; o EF só imprime valores de parâmetros com `EnableSensitiveDataLogging`, que fica desligado. Níveis: `Information` = fluxo normal e fatos de negócio; `Warning` = algo inesperado mas tratado e causado pelo cliente (409/422); `Error` = falha nossa que precisa de atenção (500); `Fatal` = a aplicação não consegue continuar. Erros esperados (validação, "não encontrado") **não** devem ser `Error` com stack trace, senão o alerta perde o sentido: eu mesmo precisei silenciar o middleware do ASP.NET que registrava todo 422 como erro.
 
+### P21. Qual a diferença entre teste unitário e de integração? Como você dividiu no projeto? 🟢 (etapa 7)
+**Resposta-guia:** O unitário testa uma peça isolada, sem I/O, e roda em milissegundos: regras do domínio, validadores e serviços com dependências substituídas. O de integração sobe a aplicação de verdade (HTTP, serialização, DI, EF, migrations) contra um PostgreSQL real e prova que as peças funcionam **juntas**. No projeto: 71 unitários em ~0,3 s e 38 de integração em ~1 s depois de o container subir. Seguem a *pirâmide de testes*: muitos unitários baratos na base, menos testes de integração caros no meio e pouquíssimos E2E no topo (esses entram na fase 2, com Playwright, quando houver interface).
+
+### P22. Mock, fake e stub: qual a diferença? Quando usou cada um? 🟢 (etapa 7)
+**Resposta-guia:** *Stub* devolve respostas fixas. *Mock* é programado e **verifica interações** ("o `AddAsync` foi chamado 0 vezes?"). *Fake* é uma implementação simplificada que funciona de verdade (um repositório em memória). Usei **mock** (NSubstitute) para repositórios simples, onde interessa verificar "não salvou" ou "chamou com o ticker normalizado". Usei **fake** para as transações, porque os testes precisam ver o histórico crescer a cada operação; programar isso com mock seria verboso e frágil.
+
+### P23. Como você sabe que seus testes realmente protegem o código? 🟢 (etapa 7)
+**Resposta-guia:** Cobertura só mostra que a linha foi *executada*, não que um defeito seria *percebido*. Por isso fiz **testes de mutação manuais**: quebrei de propósito uma proteção e confirmei que algum teste falhava. Desliguei a trava de concorrência (o teste de vendas simultâneas falhou), ignorei a ordem cronológica (3 testes falharam, em duas camadas) e removi a tradução de erro de unicidade (o teste da corrida de ticker falhou). Ferramentas como Stryker.NET automatizam essa ideia.
+
+### P24. Como testar código que depende da hora atual? E concorrência? 🟢 (etapa 7)
+**Resposta-guia:** **Hora:** injeto uma abstração (`TimeProvider`) e nos testes uso um relógio falso (`FakeTimeProvider`) fixo e que posso avançar, então o teste é determinístico (a regra "data no futuro" é verificada no segundo exato). **Concorrência:** não dá para provar com unitário; uso teste de integração com requisições realmente paralelas (`Task.WhenAll`) contra o banco real, e asserto o *invariante* (nunca vender mais do que a posição), não a ordem em que as requisições terminam. Testes de concorrência bem escritos não dependem de timing.
+
+### P25. Por que o teste de integração usa um banco real e não um InMemory? 🟢 (etapa 7)
+**Resposta-guia:** O provedor InMemory do EF não aplica chaves estrangeiras, índices únicos, `CHECK`, transações nem `advisory lock`: justamente o que garante a integridade do meu sistema. Um teste que passa no InMemory pode falhar em produção. Com Testcontainers, cada execução sobe um PostgreSQL idêntico ao de produção, aplica as migrations reais e é descartado depois.
+
 *(Novas perguntas serão adicionadas a cada etapa.)*
 
 ---
@@ -166,6 +181,20 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - **`GetLevel` personalizado:** decide o nível de cada requisição (erro de servidor → `Error`; `/health` → `Verbose`, ou seja, oculto).
 - **12-Factor App (logs):** a aplicação não gerencia arquivos de log; escreve eventos no fluxo padrão e o ambiente os coleta.
 
+### Etapa 7: testes
+- **xUnit:** `[Fact]` (um caso) e `[Theory]` + `[InlineData]` (vários casos com a mesma lógica). Cada teste roda com uma instância nova da classe, então o construtor serve de *setup*.
+- **Arrange / Act / Assert:** preparar, executar, verificar. Um teste deve verificar um comportamento e ter um nome que o descreva (`Venda_maior_que_a_posicao_lanca_DomainException_e_nao_grava`).
+- **NSubstitute (mocks):** `Substitute.For<IRepo>()`, `.Returns(...)` programa respostas, `.Received(1)` / `.DidNotReceive()` verificam chamadas. `Arg.Any<T>()` casa qualquer argumento.
+- **`FluentValidation.TestHelper`:** `TestValidate(x).ShouldHaveValidationErrorFor(p => p.Campo)` testa um validador sem subir nada.
+- **`FakeTimeProvider`:** relógio controlável (`Advance`) para testar regras que dependem de "agora".
+- **`WebApplicationFactory<Program>`:** sobe a API inteira em memória, com um `HttpClient` que fala com ela sem rede. Exige a linha `public partial class Program;` porque o `Program` gerado por top-level statements é interno.
+- **Testcontainers:** sobe containers Docker pelo próprio código de teste. O **Ryuk** é um container auxiliar que remove tudo ao final, mesmo se o teste travar.
+- **`IClassFixture` / `ICollectionFixture`:** compartilham um recurso caro (o container) entre vários testes; `[Collection]` agrupa as classes que o usam.
+- **Isolamento sem limpar o banco:** cada teste cria dados únicos (ticker aleatório, carteira própria), então não dependem uns dos outros nem da ordem de execução.
+- **Teste de mutação (manual):** estragar o código de propósito para provar que o teste certo falha.
+- **Pirâmide de testes:** muitos unitários, alguns de integração, poucos E2E.
+- **Asserir o invariante, não o timing:** no teste de concorrência verifico "no máximo 2 vendas passam", e não "qual requisição ganhou".
+
 *(Novos conceitos serão adicionados a cada etapa.)*
 
 ---
@@ -188,6 +217,8 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - Ao tentar provar que a trava de concorrência era necessária, usei `wait $(jobs -p ...)` e o script esperou o próprio servidor da API para sempre, deixando o código com a trava desativada. Parei a tarefa, restaurei o arquivo de um backup e confirmei com `grep`. Lição: antes de um experimento destrutivo, guarde backup e planeje a restauração; e `wait` sem PIDs específicos espera todos os processos em segundo plano.
 - O primeiro log que vi tinha **todo 422/409/400 como `ERR` com stack trace**: o middleware do ASP.NET registra como erro qualquer exceção, mesmo quando um `IExceptionHandler` a trata. Só percebi porque olhei o log de verdade em vez de supor que estava certo. Solução: silenciar essa categoria e deixar o nosso tratador decidir o nível.
 - O NuGet escolheu `Serilog.AspNetCore 10.0.0` (para .NET 10) num projeto .NET 8. Sem `--version`, o NuGet pega a versão mais recente, que pode não casar com o seu runtime; troquei para a linha 8.x.
+- Os 38 testes de integração passaram de primeira, e isso é suspeito: um teste que nunca falhou não provou nada. Quebrei 3 proteções de propósito (trava, ordenação, tradução de erro) e os testes certos falharam. Lição: desconfie de teste verde que nunca viu vermelho.
+- Escrevi um teste de arredondamento com uma expressão sem sentido (`10m / 3m == 0 ? 1 : 3.333333333m`) e 9 casas decimais, que a própria entidade recusou. O teste estava errado, não o código; reescrevi com dados que realmente geram dízima (custo 4 para 3 unidades).
 - Repeti o erro do `pkill -f`: usei `pgrep -f "InvestWallet.Api.dll"` num laço com `kill`, e ele também casou com o shell que rodava o comando (a linha de comando continha o texto), que foi encerrado (código 144). Lição: para achar um processo, use a porta (`ss -ltnp 'sport = :5265'`) ou guarde o PID ao iniciar. Além disso, `wait %2 %3...` esperou jobs errados; o correto é guardar os PIDs em um array e fazer `wait $PIDS`.
 - Adicionei pacotes com `--version '8.0.*'` e o `.csproj` ficou com versão flutuante; só percebi na etapa 5 e fixei todas as versões.
 - `pkill -f nome` matou o próprio shell, porque a linha de comando continha o mesmo texto. Lição: guarde o PID (`$!`) e use `kill`.

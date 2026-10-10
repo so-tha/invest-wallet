@@ -19,3 +19,11 @@ Health check: `GET /health`.
 - **Outros ambientes:** JSON, um evento por linha, pronto para ser coletado.
 - Toda resposta de erro traz um `traceId`; filtre o log por ele para ver tudo o que aconteceu naquela requisição.
 - Nunca são registrados corpos de requisição nem valores de parâmetros SQL.
+
+## Testes
+```bash
+dotnet test                                     # tudo (71 unitários + 38 de integração)
+dotnet test tests/InvestWallet.UnitTests        # rápidos, sem Docker (~0,3 s)
+dotnet test tests/InvestWallet.IntegrationTests # sobem um PostgreSQL descartável via Testcontainers (exige Docker)
+```
+Os testes de integração **não** usam o banco do `docker compose`: cada execução cria e destrói o próprio container.
