@@ -24,10 +24,8 @@ public class Transaction
     {
         if (!Enum.IsDefined(type))
             throw new DomainException("Tipo de transação inválido.");
-        if (quantity <= 0)
-            throw new DomainException("A quantidade deve ser maior que zero.");   // RN1
-        if (unitPrice <= 0)
-            throw new DomainException("O preço unitário deve ser maior que zero."); // RN1
+        ValidateAmount(quantity, "A quantidade");   // RN1
+        ValidateAmount(unitPrice, "O preço unitário");
 
         Id = Guid.NewGuid();
         WalletId = walletId;
@@ -37,5 +35,19 @@ public class Transaction
         UnitPrice = unitPrice;
         ExecutedAt = executedAt;
         CreatedAt = DateTime.UtcNow;
+    }
+
+    // numeric(18,6) no banco: até 6 casas decimais e menos de 1 trilhão.
+    // Validar aqui evita arredondamento silencioso e erro de overflow do banco.
+    private const decimal MaxAmount = 999_999_999_999m;
+
+    private static void ValidateAmount(decimal value, string label)
+    {
+        if (value <= 0)
+            throw new DomainException($"{label} deve ser maior que zero.");
+        if (value > MaxAmount)
+            throw new DomainException($"{label} excede o valor máximo permitido.");
+        if (decimal.Round(value, 6) != value)
+            throw new DomainException($"{label} deve ter no máximo 6 casas decimais.");
     }
 }

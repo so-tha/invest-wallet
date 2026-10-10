@@ -1,4 +1,6 @@
 using InvestWallet.Application.Assets;
+using InvestWallet.Application.Positions;
+using InvestWallet.Application.Transactions;
 using InvestWallet.Application.Wallets;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -11,6 +13,12 @@ public static class DependencyInjection
         // Scoped = uma instância por requisição HTTP
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IAssetService, AssetService>();
+        services.AddScoped<ITransactionService, TransactionService>();
+        services.AddScoped<IPositionService, PositionService>();
+
+        // Relógio injetável: nos testes substituímos por um relógio falso (FakeTimeProvider)
+        services.AddSingleton(TimeProvider.System);
+
         return services;
     }
 }

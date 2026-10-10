@@ -30,6 +30,24 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 ### P7. O que é um DTO e por que não devolver a entidade direto? 🟢 (etapa 3)
 **Resposta-guia:** DTO (*Data Transfer Object*) é o formato dos dados que entram e saem da API. Se eu devolvesse a entidade, qualquer mudança no banco ou no domínio quebraria o contrato público da API, e eu poderia expor campos internos sem querer (ex.: coleções de navegação, gerando ciclos no JSON). Com DTOs, o contrato é estável e explícito.
 
+### P8. Diferença entre `Scoped`, `Transient` e `Singleton`? Por que o `DbContext` é `Scoped`? 🟢 (etapa 3)
+**Resposta-guia:** *Transient*: nova instância a cada vez que é pedida. *Scoped*: uma instância por requisição HTTP. *Singleton*: uma só para a aplicação inteira. O `DbContext` é Scoped porque (1) não é thread-safe, então duas requisições não podem dividir a mesma instância; (2) ele rastreia as mudanças das entidades que carrega, funcionando como uma *unidade de trabalho* da requisição; como Singleton, esse rastreamento acumularia dados velhos para sempre; como Transient, o repositório e o serviço da mesma requisição receberiam instâncias diferentes e não enxergariam as mudanças um do outro.
+
+### P9. Como você garante que não dá para vender mais do que se possui? 🟢 (etapa 4)
+**Resposta-guia:** Em três níveis. (1) *Regra de domínio*: o `PositionCalculator` reprocessa o histórico em ordem cronológica e lança exceção se a quantidade ficar negativa em qualquer ponto, não só no total final. (2) *Concorrência*: duas vendas simultâneas poderiam ler o mesmo saldo e ambas passar; por isso a validação roda dentro de uma transação de banco com um *advisory lock* por (carteira, ativo), serializando as operações do mesmo par. Testei: sem a trava, 6 vendas de 10 sobre um saldo de 20 passaram todas (saldo final −40); com a trava passam exatamente 2. (3) O banco ainda tem `CHECK (quantity > 0)` como última defesa.
+
+### P10. Por que apagar uma transação pode ser proibido? 🟢 (etapa 4)
+**Resposta-guia:** Porque o saldo é derivado do histórico. Apagar uma compra antiga pode deixar uma venda posterior sem lastro (saldo negativo no passado). Antes de remover, recalculo o histórico sem aquela transação; se ficar inválido, devolvo 422. É a regra RN6.
+
+### P11. Como o preço médio é calculado? E por que vender não o altera? 🟢 (etapa 4)
+**Resposta-guia:** Preço médio = custo total ÷ quantidade. Cada compra soma `quantidade × preço` ao custo. Uma venda retira do custo a fração proporcional à quantidade vendida (`custo × qtdVendida ÷ qtdAtual`), então o custo por unidade restante permanece o mesmo. O preço *de venda* só interessaria para calcular lucro realizado, que está fora do escopo. Quando a posição zera, o custo é zerado também, e uma nova compra começa um preço médio novo.
+
+### P12. Por que usar `decimal` e não `double` para dinheiro? 🟢 (etapas 2 e 4)
+**Resposta-guia:** `double` é binário e não representa exatamente valores como 0,1; em `double`, `0.1 + 0.2 != 0.3`. `decimal` é base 10 e exato para valores monetários. Há um teste unitário que mostra isso (`Usa_decimal_sem_erro_de_ponto_flutuante`). No banco, `numeric(18,6)`.
+
+### P13. Por que testar o `PositionCalculator` sem banco? 🟢 (etapa 4)
+**Resposta-guia:** Porque é uma função pura: dadas as transações, devolve a posição. Os 14 testes rodam em ~50 ms, sem Docker. Isso só é possível porque a regra mora no Domain e não depende de infraestrutura, que é o resultado prático da arquitetura em camadas.
+
 *(Novas perguntas serão adicionadas a cada etapa.)*
 
 ---
@@ -85,6 +103,21 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - **Enums como texto no JSON:** `"Stock"` em vez de `1`, mais legível e estável se a ordem do enum mudar.
 - **Mapeamento manual (`ToResponse`) em vez de AutoMapper:** para poucos campos, é mais explícito, fácil de depurar e sem "mágica".
 
+### Etapa 4: Transações e posição
+- **Método do preço médio:** custo total ÷ quantidade. Compra soma ao custo; venda retira o custo proporcional. É o método usado em carteiras de renda variável no Brasil.
+- **Função pura:** mesma entrada, mesma saída, sem efeitos colaterais (sem banco, sem relógio). Fácil de testar.
+- **Ordenação determinística:** ordenar por data, depois `CreatedAt`, depois `Id`. Sem desempate, transações no mesmo instante poderiam produzir resultados diferentes a cada execução.
+- **Condição de corrida (race condition):** duas operações leem o mesmo estado, ambas decidem que podem prosseguir e juntas violam a regra. Clássico "check-then-act".
+- **Transação de banco:** grupo de operações que acontecem todas ou nenhuma (`BEGIN`/`COMMIT`/`ROLLBACK`).
+- **Advisory lock (PostgreSQL):** trava "lógica", identificada por um número, que a própria aplicação escolhe. `pg_advisory_xact_lock` é liberada sozinha no fim da transação. Alternativas: `SELECT ... FOR UPDATE` numa linha, isolamento `Serializable` com retry, ou concorrência otimista com coluna de versão.
+- **`Func<Task<T>>`:** um "callback" assíncrono que devolve `T`. Permite passar um bloco de código para ser executado dentro da trava, como `async () => {...}` em TypeScript.
+- **`TimeProvider` (.NET 8):** abstração do relógio. Em produção usa o relógio real; em testes, um relógio falso permite simular datas.
+- **`DateTimeOffset` vs `DateTime`:** `DateTimeOffset` carrega o fuso; converto com `.UtcDateTime`. O Npgsql exige UTC em colunas `timestamptz`.
+- **Teste parametrizado (`[Theory]` + `[InlineData]`):** um método de teste roda várias vezes com entradas diferentes.
+- **Coleção expressions (`[Buy(...), Sell(...)]`, C# 12):** sintaxe curta para criar listas.
+- **`Include` (eager loading):** pede ao EF para trazer a entidade relacionada (o `Asset`) no mesmo SELECT, evitando consultas extras (problema N+1).
+- **422 para referência inexistente no corpo:** se o `assetId` enviado não existe, a URL é válida mas o conteúdo não é processável.
+
 *(Novos conceitos serão adicionados a cada etapa.)*
 
 ---
@@ -104,4 +137,5 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 ## 4. Erros que aconteceram (ótimo material para "conte um problema que você resolveu")
 - `.env` com `;` sem aspas quebrou `source .env`: o shell tratou `;` como separador. Solução: aspas. Lição: um health check que não toca no banco não prova que o banco está configurado.
 - `dotnet ef migrations script --no-build` gerou script vazio: usou binário antigo, anterior à migration. Lição: recompile depois de criar a migration.
+- Ao tentar provar que a trava de concorrência era necessária, usei `wait $(jobs -p ...)` e o script esperou o próprio servidor da API para sempre, deixando o código com a trava desativada. Parei a tarefa, restaurei o arquivo de um backup e confirmei com `grep`. Lição: antes de um experimento destrutivo, guarde backup e planeje a restauração; e `wait` sem PIDs específicos espera todos os processos em segundo plano.
 - `pkill -f nome` matou o próprio shell, porque a linha de comando continha o mesmo texto. Lição: guarde o PID (`$!`) e use `kill`.

@@ -27,7 +27,7 @@
 - [x] 1. Setup: solução, projetos, Git, Docker Compose, configuração
 - [x] 2. Banco de dados: entidades, DbContext, migration inicial
 - [x] 3. CRUD de Carteiras e Ativos
-- [ ] 4. Transações + regras de negócio (compra/venda, posição, preço médio)
+- [x] 4. Transações + regras de negócio (compra/venda, posição, preço médio)
 - [ ] 5. Validações (FluentValidation → 400) e refinar erros. *(GlobalExceptionHandler com ProblemDetails já feito na etapa 3)*
 - [ ] 6. Logs estruturados
 - [ ] 7. Testes automatizados (unitários + integração)
@@ -37,7 +37,7 @@
 - [ ] 11. Revisão final e docs/ESTUDO.md
 
 ## Próxima etapa
-Etapa 4: Transações + regras de negócio (compra/venda, posição, preço médio).
+Etapa 5: Validações (FluentValidation → 400) e refinar tratamento de erros.
 
 ## Decisões e suposições
 - PostgreSQL em Docker (a vaga não especifica banco) — suposição.
@@ -52,3 +52,6 @@ Etapa 4: Transações + regras de negócio (compra/venda, posição, preço méd
 - Adiantei o `GlobalExceptionHandler` (404/409/422/500) para a etapa 3, senão "não encontrado" viraria 500 e não daria para testar.
 - Pendências para a etapa 5: validação de campo (nome vazio, ticker vazio) hoje devolve 422 e deve ser 400; mensagem de enum inválido ("Banana") ficou confusa; capturar `DbUpdateException` de unicidade (corrida entre dois POSTs com o mesmo ticker).
 - `createdAt` da resposta do POST tem 7 casas decimais de segundo e o banco guarda 6 (microssegundos) → GET devolve ligeiramente diferente. Inofensivo; truncar no domínio se incomodar.
+- Etapa 4: provei com 6 vendas paralelas que sem a trava o saldo fica negativo (−40) e com a trava só 2 de 6 passam. Experimento exigiu parar e restaurar o arquivo (ver ESTUDO.md, seção 4).
+- Etapa 4: 14 testes unitários do `PositionCalculator` já escritos (a etapa 7 cobrirá serviços e integração/endpoints).
+- Pendência etapa 5: quantidade/preço com mais de 6 casas ou 0 hoje dão 422; devem ser 400 (validação de entrada). O enum inválido continua com mensagem confusa.
