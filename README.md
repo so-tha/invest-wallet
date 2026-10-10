@@ -27,3 +27,11 @@ dotnet test tests/InvestWallet.UnitTests        # rápidos, sem Docker (~0,3 s)
 dotnet test tests/InvestWallet.IntegrationTests # sobem um PostgreSQL descartável via Testcontainers (exige Docker)
 ```
 Os testes de integração **não** usam o banco do `docker compose`: cada execução cria e destrói o próprio container.
+
+## Documentação da API (Swagger)
+Com a API rodando em Development, abra `http://localhost:5265/swagger` (ou a porta exibida no console).
+Cada endpoint traz descrição, exemplos de corpo, parâmetros e **todas** as respostas possíveis (200/201/204 e os erros 400, 404, 409, 422, 500).
+O documento OpenAPI cru está em `/swagger/v1/swagger.json`.
+
+Fora de Development o Swagger fica desligado por padrão; para ligar, defina `Swagger__Enabled=true`.
+Testes automatizados garantem que a documentação continua válida e completa (veja `OpenApiDocumentTests`).

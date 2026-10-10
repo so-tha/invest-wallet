@@ -31,13 +31,13 @@
 - [x] 5. Validações (FluentValidation → 400) e refinar erros. *(GlobalExceptionHandler com ProblemDetails já feito na etapa 3)*
 - [x] 6. Logs estruturados
 - [x] 7. Testes automatizados (unitários + integração)
-- [ ] 8. Swagger/OpenAPI documentado
+- [x] 8. Swagger/OpenAPI documentado
 - [ ] 9. README, Dockerfile da API, GitHub Actions
 - [ ] 10. (Opcional) Importar nota de corretagem via LLM com fallback
 - [ ] 11. Revisão final e docs/ESTUDO.md
 
 ## Próxima etapa
-Etapa 8: Swagger/OpenAPI documentado (descrições, exemplos, enums, respostas de erro).
+Etapa 9: README final, Dockerfile da API, docker-compose completo e GitHub Actions (build + testes).
 
 ## Decisões e suposições
 - PostgreSQL em Docker (a vaga não especifica banco) — suposição.
@@ -63,3 +63,6 @@ Etapa 8: Swagger/OpenAPI documentado (descrições, exemplos, enums, respostas d
 - Etapa 7 concluída: 71 testes unitários + 38 de integração (Testcontainers/PostgreSQL), todos passando. 3 mutações manuais detectadas (trava de concorrência, ordenação cronológica, tradução de erro de unicidade).
 - Pendência: não medi cobertura de código (o `coverlet.collector` já está nos projetos de teste); E2E com Playwright fica para a fase 2 com o frontend.
 - Para a etapa 9 (CI): os testes de integração precisam de Docker; os runners `ubuntu-latest` do GitHub Actions já têm.
+- Etapa 8 concluída: 15/15 operações com resumo, 40 respostas de erro documentadas, exemplos nos 3 corpos de requisição, enums como texto, `application/problem+json` nos erros, `Swagger:Enabled` para expor fora de Development. 9 testes de contrato (suíte total: 71 unitários + 47 de integração).
+- Decisão: Swagger desligado em produção por padrão (ver P28); o container do projeto o ligará via `Swagger__Enabled=true`.
+- Para a etapa 9: a API em container roda em `Production` → definir `ConnectionStrings__Default`, `Swagger__Enabled=true`, aplicar migrations na subida (decidir como) e esperar o healthcheck do banco.

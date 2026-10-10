@@ -85,6 +85,18 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 ### P25. Por que o teste de integração usa um banco real e não um InMemory? 🟢 (etapa 7)
 **Resposta-guia:** O provedor InMemory do EF não aplica chaves estrangeiras, índices únicos, `CHECK`, transações nem `advisory lock`: justamente o que garante a integridade do meu sistema. Um teste que passa no InMemory pode falhar em produção. Com Testcontainers, cada execução sobe um PostgreSQL idêntico ao de produção, aplica as migrations reais e é descartado depois.
 
+### P26. O que é OpenAPI/Swagger e por que documentar assim? 🟢 (etapa 8)
+**Resposta-guia:** OpenAPI é a especificação (um JSON/YAML) que descreve uma API REST: rotas, parâmetros, corpos, respostas e erros. Swagger UI é a interface que a lê e deixa testar os endpoints no navegador. O documento é **gerado do código** (Swashbuckle lê os controllers, os atributos e os comentários `///`), então tende a refletir a realidade. A partir dele dá para gerar clientes tipados, contratos para o front-end e testes. O valor está na qualidade: de nada serve um Swagger só com os nomes das rotas; precisa de descrição, exemplos e **todas as respostas, inclusive as de erro**.
+
+### P27. Como você impede que a documentação fique desatualizada? 🟢 (etapa 8)
+**Resposta-guia:** Com testes de contrato sobre o próprio `swagger.json`: o documento é válido segundo a especificação; expõe exatamente os 15 endpoints planejados (criar ou remover um endpoint sem atualizar o contrato quebra o teste); toda operação tem resumo, tag, resposta de sucesso e 500; as que têm corpo documentam 400; as que apontam para um recurso documentam 404; erros são `application/problem+json`; DTOs têm descrição. Provei que funciona: removi um `409` e um resumo de propósito, e os testes certos falharam.
+
+### P28. Você expõe o Swagger em produção? 🟢 (etapa 8)
+**Resposta-guia:** Depende, e deve ser decisão consciente. A documentação revela toda a superfície da API, o que ajuda um atacante em uma API pública. Por isso fica **ligado em Development** e **desligado nos demais ambientes por padrão**, com a configuração `Swagger:Enabled=true` para ligar quando faz sentido (uma API interna, ou o container deste projeto, para quem for avaliá-lo). Existe teste cobrindo os dois casos. Não substitui autenticação: esconder a documentação não protege endpoints.
+
+### P29. Por que a quantidade e o preço são `decimal` no JSON e o que acontece com `double`? 🟢 (etapa 8)
+**Resposta-guia:** No JSON o número é só texto (`35.5`); a precisão se decide ao ler. Em C# o campo é `decimal`, então o valor é lido sem passar por ponto flutuante binário. No contrato OpenAPI isso aparece como `number` com formato `double`, mas a API valida no servidor o limite de 12 dígitos inteiros e 6 casas decimais e o documenta na descrição do campo. Em integrações financeiras convém combinar também o arredondamento (aqui: `AwayFromZero`, 6 casas, só na apresentação).
+
 *(Novas perguntas serão adicionadas a cada etapa.)*
 
 ---
@@ -195,6 +207,20 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - **Pirâmide de testes:** muitos unitários, alguns de integração, poucos E2E.
 - **Asserir o invariante, não o timing:** no teste de concorrência verifico "no máximo 2 vendas passam", e não "qual requisição ganhou".
 
+### Etapa 8: Swagger/OpenAPI
+- **Swashbuckle:** gera o documento OpenAPI a partir do código. `AddSwaggerGen` configura; `UseSwagger` serve o JSON; `UseSwaggerUI` serve a interface.
+- **Comentários XML (`///`):** `<summary>` (resumo), `<remarks>` (detalhes), `<param>` (parâmetros e, nos `record`s, as propriedades), `<response code="...">` (descrição de cada status). Exigem `GenerateDocumentationFile` no `.csproj`; o compilador gera um `.xml` que o Swashbuckle lê.
+- **`[ProducesResponseType]`:** declara as respostas possíveis de uma ação (status, tipo e content-type). Sem ele o Swagger só conhece o caso de sucesso.
+- **Atributos personalizados:** `ProducesProblemResponse(404)` herda de `ProducesResponseTypeAttribute` para não repetir tipo e content-type em cada ação.
+- **`ISchemaFilter` e `IOperationFilter`:** pontos de extensão do Swashbuckle para ajustar schemas (exemplos) e operações (trocar `application/json` por `application/problem+json` nas respostas de erro).
+- **`[Tags]`:** agrupa os endpoints na interface (Carteiras, Ativos, Transações, Posições).
+- **`[Produces]`:** restringe o content-type das respostas; foi preciso corrigi-lo nos erros com um filtro.
+- **Enums como texto:** `JsonStringEnumConverter` (registrado nas opções do MVC) faz o Swagger listar `Stock`, `Etf`... em vez de números.
+- **`$ref` não aceita descrição ao lado** (OpenAPI 3.0): a descrição de um enum fica no schema do próprio enum.
+- **Raw string literal (`"""`) do C# 11:** texto multilinha sem escapes, usado na descrição da API.
+- **Teste de contrato:** testa o documento (`swagger.json`) em vez do comportamento; `Microsoft.OpenApi.Readers` valida o documento contra a especificação.
+- **`WithWebHostBuilder`:** deriva da fábrica de testes uma variante com outro ambiente/configuração, reutilizando o banco já iniciado.
+
 *(Novos conceitos serão adicionados a cada etapa.)*
 
 ---
@@ -219,6 +245,8 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - O NuGet escolheu `Serilog.AspNetCore 10.0.0` (para .NET 10) num projeto .NET 8. Sem `--version`, o NuGet pega a versão mais recente, que pode não casar com o seu runtime; troquei para a linha 8.x.
 - Os 38 testes de integração passaram de primeira, e isso é suspeito: um teste que nunca falhou não provou nada. Quebrei 3 proteções de propósito (trava, ordenação, tradução de erro) e os testes certos falharam. Lição: desconfie de teste verde que nunca viu vermelho.
 - Escrevi um teste de arredondamento com uma expressão sem sentido (`10m / 3m == 0 ? 1 : 3.333333333m`) e 9 casas decimais, que a própria entidade recusou. O teste estava errado, não o código; reescrevi com dados que realmente geram dízima (custo 4 para 3 unidades).
+- Ia validar a documentação com uma mutação (`git checkout` para restaurar), mas o código dos controllers ainda **não estava commitado**: o `checkout` teria apagado o trabalho. Percebi antes de rodar e commitei primeiro. Lição: antes de usar `git checkout --` como "desfazer", confirme que o que você quer manter já está salvo.
+- O `[Produces("application/json")]` no controller sobrescrevia o `application/problem+json` que eu havia declarado nos erros; só vi ao inspecionar o `swagger.json` gerado. Lição: confira o artefato gerado, não só o código que o configura.
 - Repeti o erro do `pkill -f`: usei `pgrep -f "InvestWallet.Api.dll"` num laço com `kill`, e ele também casou com o shell que rodava o comando (a linha de comando continha o texto), que foi encerrado (código 144). Lição: para achar um processo, use a porta (`ss -ltnp 'sport = :5265'`) ou guarde o PID ao iniciar. Além disso, `wait %2 %3...` esperou jobs errados; o correto é guardar os PIDs em um array e fazer `wait $PIDS`.
 - Adicionei pacotes com `--version '8.0.*'` e o `.csproj` ficou com versão flutuante; só percebi na etapa 5 e fixei todas as versões.
 - `pkill -f nome` matou o próprio shell, porque a linha de comando continha o mesmo texto. Lição: guarde o PID (`$!`) e use `kill`.
