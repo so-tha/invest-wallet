@@ -124,3 +124,6 @@ finally
 }
 
 return 0;
+
+// Necessário para os testes de integração (WebApplicationFactory<Program>) enxergarem a classe gerada pelo top-level statements
+public partial class Program;
