@@ -83,6 +83,21 @@ public class SentryTests
     }
 
     [Fact]
+    public async Task O_nome_da_maquina_nao_vai_como_server_name_nem_o_usuario_do_sistema_nos_caminhos()
+    {
+        var (client, events) = CreateClient(brokenRepository: true);
+
+        await client.GetAsync("/api/wallets");
+
+        var captured = Assert.Single(events);
+        Assert.Equal("investwallet-api", captured.ServerName);
+        Assert.NotEqual(Environment.MachineName, captured.ServerName);
+        var paths = captured.SentryExceptions!.SelectMany(e => e.Stacktrace?.Frames ?? [])
+            .SelectMany(f => new[] { f.FileName, f.AbsolutePath }).Where(p => p is not null);
+        Assert.DoesNotContain(paths, p => p!.StartsWith("/home/") || p.StartsWith("/Users/"));
+    }
+
+    [Fact]
     public async Task Segredos_na_mensagem_da_excecao_sao_removidos_antes_do_envio()
     {
         var (client, events) = CreateClient(brokenRepository: true);

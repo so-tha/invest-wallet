@@ -109,7 +109,7 @@ src/
   InvestWallet.Api/             controllers, tratamento de erros, Swagger, Serilog
 tests/
   InvestWallet.UnitTests/         74 testes, sem banco
-  InvestWallet.IntegrationTests/  80 testes: API real + PostgreSQL descartável
+  InvestWallet.IntegrationTests/  88 testes: API real + PostgreSQL descartável
 docs/                           requisitos, modelo de dados, endpoints, ADRs, guia de estudo
 ```
 
@@ -152,8 +152,9 @@ docker compose up --build                       # o compose repassa SENTRY_DSN p
 Para ver um erro chegar: `docker compose stop db`, chame `GET /api/wallets` (resposta 500) e depois `docker compose start db`. O evento no Sentry traz a tag `trace_id`, a mesma do log e da resposta.
 
 - **Só erros 500** vão para o Sentry; 400, 404, 409 e 422 são comportamento esperado e ficam de fora.
-- **Não vão:** corpo de requisição, cookies, cabeçalhos de autenticação, IP. Trechos como `Password=...` ou `Authorization: Bearer ...` em mensagens de exceção são removidos antes do envio.
-- O comportamento é coberto por testes **sem rede** (transporte simulado). A entrega real ao Sentry depende do seu DSN e não é testada no CI. Decisão em [ADR 0006](docs/adr/0006-rastreamento-de-erros-com-sentry.md).
+- **Não vão:** corpo de requisição, cookies, cabeçalhos de autenticação, IP, o nome da máquina (`server_name` e `SERVER_NAME` viram `investwallet-api`) nem o seu usuário do sistema (caminhos como `/home/ana/...` viram `~/...`, nos stack frames e nas imagens de debug). Trechos como `Password=...` ou `Authorization: Bearer ...` em mensagens de exceção são removidos antes do envio.
+- **Ainda vai** um identificador anônimo de instalação (`user.id`, um UUID gerado pelo SDK e gravado em `~/.local/share/Sentry`) e o `release` com o hash do commit.
+- O comportamento é coberto por testes **sem rede** (transporte simulado) e foi **verificado com envio real** (ver `docs/REVISAO-FINAL.md`). A entrega real não é testada no CI, pois depende de um DSN. Decisão em [ADR 0006](docs/adr/0006-rastreamento-de-erros-com-sentry.md).
 
 ## Configuração
 | Variável | Para quê | Padrão |

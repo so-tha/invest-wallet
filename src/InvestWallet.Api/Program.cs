@@ -36,6 +36,9 @@ try
         // Por isso, sem DSN configurado, definimos "" de propósito (descoberto por teste, não pela documentação).
         options.Dsn = builder.Configuration["Sentry:Dsn"] ?? "";
         options.SendDefaultPii = false;                // não envia IP, cookies, cabeçalhos de autenticação...
+        // O SDK envia o nome da máquina como server_name (num notebook, o nome pessoal do computador). Valor neutro,
+        // configurável por "Sentry:ServerName" se for preciso distinguir réplicas.
+        options.ServerName ??= SentryEventScrubber.ServerName;
         options.MaxRequestBodySize = RequestSize.None; // nunca envia o corpo das requisições
         options.TracesSampleRate = 0;                  // só erros: sem monitoramento de desempenho
         options.AutoSessionTracking = false;

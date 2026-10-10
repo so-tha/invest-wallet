@@ -47,6 +47,52 @@ public class SentryEventScrubberTests
         Assert.Equal("token=[REDACTED]", sentryEvent.Message.Formatted);
     }
 
+    [Theory]
+    [InlineData("/home/ana/Documents/projeto/src/Api/Program.cs", "~/Documents/projeto/src/Api/Program.cs")]
+    [InlineData("/Users/ana/dev/app/Service.cs", "~/dev/app/Service.cs")]
+    [InlineData("C:\\Users\\ana\\source\\app\\Service.cs", "~\\source\\app\\Service.cs")]
+    [InlineData("/src/src/InvestWallet.Api/Program.cs", "/src/src/InvestWallet.Api/Program.cs")]   // caminho do build em container: intacto
+    [InlineData("/usr/lib/dotnet/shared/Microsoft.AspNetCore.App/8.0.0/x.dll", "/usr/lib/dotnet/shared/Microsoft.AspNetCore.App/8.0.0/x.dll")]
+    public void Substitui_o_diretorio_do_usuario_nos_caminhos_e_preserva_os_demais(string input, string expected)
+    {
+        Assert.Equal(expected, SentryEventScrubber.ScrubPath(input));
+    }
+
+    [Fact]
+    public void Limpa_o_caminho_dos_arquivos_nos_frames_do_stack_trace()
+    {
+        var frame = new SentryStackFrame { FileName = "/home/ana/p/Program.cs", AbsolutePath = "/home/ana/p/Program.cs" };
+        var sentryEvent = new SentryEvent
+        {
+            SentryExceptions = [new SentryException { Stacktrace = new SentryStackTrace { Frames = [frame] } }]
+        };
+
+        new SentryEventScrubber().Process(sentryEvent);
+
+        Assert.Equal("~/p/Program.cs", frame.FileName);
+        Assert.Equal("~/p/Program.cs", frame.AbsolutePath);
+    }
+
+    [Fact]
+    public void Limpa_SERVER_NAME_da_requisicao_e_os_caminhos_das_imagens_de_debug()
+    {
+        var sentryEvent = new SentryEvent
+        {
+            Request = new SentryRequest(),
+            DebugImages = [new DebugImage { CodeFile = "/home/ana/app/bin/X.dll", DebugFile = "/home/ana/app/obj/X.pdb" }]
+        };
+        sentryEvent.Request.Env["SERVER_NAME"] = "notebook-da-ana";
+        sentryEvent.Request.Env["SERVER_PORT"] = "5265";
+
+        new SentryEventScrubber().Process(sentryEvent);
+
+        Assert.Equal(SentryEventScrubber.ServerName, sentryEvent.Request.Env["SERVER_NAME"]);
+        Assert.Equal("5265", sentryEvent.Request.Env["SERVER_PORT"]); // o resto não é tocado
+        var image = Assert.Single(sentryEvent.DebugImages!);
+        Assert.Equal("~/app/bin/X.dll", image.CodeFile);
+        Assert.Equal("~/app/obj/X.pdb", image.DebugFile);
+    }
+
     [Fact]
     public void Evento_sem_excecoes_nem_mensagem_passa_sem_erro()
     {

@@ -16,7 +16,7 @@ Leia em voz alta, com as suas palavras, até soar natural. Todos os números aba
 >
 > A arquitetura tem **quatro camadas**, com as dependências apontando para o núcleo, então as regras são testadas sem banco. Cuidei também do que acontece quando algo dá errado: erros no formato **ProblemDetails** com 400, 404, 409 e 422 bem distintos, e um **traceId** em cada resposta que leva direto aos **logs estruturados** em JSON.
 >
-> São **154 testes**, unitários e de integração contra um PostgreSQL real em Docker, com **98,9% de cobertura de linhas** (sem código gerado). Para saber se os testes realmente protegem, eu **quebrei o código de propósito** e confirmei que eles falham.
+> São **162 testes**, unitários e de integração contra um PostgreSQL real em Docker, com **98,9% de cobertura de linhas** (sem código gerado). Para saber se os testes realmente protegem, eu **quebrei o código de propósito** e confirmei que eles falham.
 >
 > Os erros 500 podem ir para o **Sentry** (integração opcional, com limpeza de segredos). Roda com um `docker compose up`, tem Swagger completo e um pipeline de **CI no GitHub Actions** que escrevi e executei localmente, mas ainda preciso ver rodando no GitHub. O que falta é o **frontend em React com testes Playwright** e a **integração com LLM**; são os meus próximos passos.
 
@@ -180,6 +180,9 @@ Veja a resposta-guia na P37: ela usa os erros reais do projeto.
 
 ### P40. Como você testa a integração com um serviço externo sem acessar a rede? 🟢 (extensão)
 **Resposta-guia:** Troco a borda de saída. Com um DSN falso só para ativar o SDK, um transporte que descarta tudo e um `BeforeSend` que registra os eventos que *seriam* enviados, os testes verificam o que sai (um evento por 500, com a tag `trace_id`), o que não sai (nenhum evento em 400/404/409/422, nenhum segredo, nenhum cabeçalho de autenticação) e que sem DSN nada é ativado. O que **não** se prova assim é a entrega real, e é honesto dizer isso. Cuidado conhecido: o `SentrySdk` é estado estático global, então testes não devem depender de "o SDK está ativado/desativado" de forma dependente da ordem de execução.
+
+### P41. Você testou com um serviço externo simulado. O que o teste com o serviço real mostrou que o simulado não mostrou? 🟢 (extensão)
+**Resposta-guia:** Os testes simulados provavam o que eu *pensei* em verificar (IP, cookies, corpo, segredos em mensagens). Ao inspecionar o **payload real** enviado, vi coisas em que eu não tinha pensado: o **nome da máquina** (`server_name` e `request.env.SERVER_NAME`) e o **usuário do sistema** nos caminhos de arquivo (stack frames e `debug_meta`), mesmo com `SendDefaultPii=false`. Corrigi no limpador, escrevi testes e confirmei de novo no payload real (0 ocorrências). A lição: teste com simulação verifica as hipóteses que você já tem; só o dado real mostra as que você não tem. E, por honestidade, ainda sai um identificador anônimo de instalação, documentado no README.
 
 *(Novas perguntas serão adicionadas a cada etapa.)*
 
@@ -375,6 +378,7 @@ Veja a resposta-guia na P37: ela usa os erros reais do projeto.
 - Para testar a migration num banco vazio sem tocar nos dados de desenvolvimento, criei um banco temporário (`iw_smoke`) no mesmo servidor, apontei o container para ele e o apaguei no final.
 - A senha do banco fica visível na connection string do container (`docker inspect`). É aceitável em desenvolvimento e está no README como limitação; em produção, segredos vêm de um gerenciador.
 - **O SDK do Sentry derrubaria a aplicação em todos os ambientes sem DSN** (lança exceção na inicialização) e **capturava até os 404/409/422**. Eu havia suposto o contrário em ambos os casos; só os testes mostraram. Lição: não confie na suposição sobre o comportamento de uma biblioteca; escreva o teste que o prova.
+- **Ao enviar um evento real, o payload continha o nome da minha máquina e o meu usuário do sistema** (`server_name`, `SERVER_NAME`, caminhos nos frames e nas imagens de debug), embora os testes simulados passassem e `SendDefaultPii=false` estivesse ligado. Só inspecionar o que de fato saiu mostrou. Corrigi em duas rodadas (a primeira ainda deixou 10 caminhos em `debug_meta`), reconfirmando no payload real a cada vez.
 - **O limpador de segredos vazava tokens `Bearer`**: um teste escrito *antes* da correção (e visto falhando) mostrou o defeito, que o teste de integração (só `Password=...`) não pegaria.
 - **A cobertura caiu de 98,8% para 84% de repente**: o motivo era o arquivo gerado do `[GeneratedRegex]`, não código meu sem teste. Excluí o código gerado da medição (como as migrations) e **mostrei os dois números**, em vez de escolher o melhor.
 - **Documentos que mentiam:** o `PROGRESSO.md` prometia "branches + PRs por etapa", mas tudo foi para a `main`; o `docs/04` citava uma biblioteca de testes (FluentAssertions) que eu nunca usei; o README tinha contagens antigas de testes. Só achei ao fazer a revisão final, cruzando cada afirmação com o repositório. Lição: documentação é código; precisa ser revisada.
