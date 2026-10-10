@@ -1,6 +1,7 @@
 using InvestWallet.Application.Assets;
 using InvestWallet.Application.Transactions;
 using InvestWallet.Application.Wallets;
+using InvestWallet.Infrastructure.ErrorReporting;
 using InvestWallet.Infrastructure.Persistence;
 using InvestWallet.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +30,8 @@ public static class DependencyInjection
         services.AddScoped<IWalletRepository, WalletRepository>();
         services.AddScoped<IAssetRepository, AssetRepository>();
         services.AddScoped<ITransactionRepository, TransactionRepository>();
+
+        services.AddErrorReporting(configuration);
 
         return services;
     }

@@ -1,4 +1,6 @@
 using FluentValidation;
+using InvestWallet.Api.Observability;
+using InvestWallet.Application.ErrorReporting;
 using InvestWallet.Application.Exceptions;
 using InvestWallet.Domain.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
@@ -12,8 +14,18 @@ namespace InvestWallet.Api.Middleware;
 public class GlobalExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<GlobalExceptionHandler> _logger;
+    private readonly IErrorReporter _reporter;
+    private readonly IHostEnvironment _environment;
+    private readonly TimeProvider _clock;
 
-    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) => _logger = logger;
+    public GlobalExceptionHandler(
+        ILogger<GlobalExceptionHandler> logger, IErrorReporter reporter, IHostEnvironment environment, TimeProvider clock)
+    {
+        _logger = logger;
+        _reporter = reporter;
+        _environment = environment;
+        _clock = clock;
+    }
 
     public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken ct)
     {
@@ -55,11 +67,25 @@ public class GlobalExceptionHandler : IExceptionHandler
                 _logger.LogError(exception, "Erro não tratado em {Method} {Path}", context.Request.Method, context.Request.Path);
                 body = ErrorResponses.Create(context, status, "Erro interno do servidor",
                     "Ocorreu um erro inesperado. Informe o traceId ao suporte.");
+                Report(context, exception);
                 break;
         }
 
         context.Response.StatusCode = status;
         await context.Response.WriteAsJsonAsync(body, body.GetType(), options: null, contentType: "application/problem+json", ct);
         return true; // true = já tratei, não propague
+    }
+
+    /// <summary>Avisar sobre o erro (issue no GitHub etc.) é um extra: só enfileira, e uma falha aqui NUNCA piora a resposta.</summary>
+    private void Report(HttpContext context, Exception exception)
+    {
+        try
+        {
+            _reporter.TryReport(ErrorReportFactory.Create(context, exception, _environment.EnvironmentName, _clock.GetUtcNow()));
+        }
+        catch (Exception reportingFailure)
+        {
+            _logger.LogWarning(reportingFailure, "Não foi possível enfileirar o aviso do erro");
+        }
     }
 }
