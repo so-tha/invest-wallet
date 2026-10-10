@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using InvestWallet.Application.Assets;
 using InvestWallet.Application.Common;
 using InvestWallet.Application.Exceptions;
@@ -15,15 +16,17 @@ public class TransactionService : ITransactionService
     private readonly IWalletRepository _wallets;
     private readonly IAssetRepository _assets;
     private readonly IValidator<TransactionRequest> _validator;
+    private readonly ILogger<TransactionService> _logger;
 
     public TransactionService(
         ITransactionRepository transactions, IWalletRepository wallets, IAssetRepository assets,
-        IValidator<TransactionRequest> validator)
+        IValidator<TransactionRequest> validator, ILogger<TransactionService> logger)
     {
         _transactions = transactions;
         _wallets = wallets;
         _assets = assets;
         _validator = validator;
+        _logger = logger;
     }
 
     public async Task<PagedResult<TransactionResponse>> ListAsync(
@@ -69,6 +72,11 @@ public class TransactionService : ITransactionService
             return true;
         }, ct);
 
+        // Template estruturado: cada {Campo} vira uma propriedade pesquisável no log (não é concatenação de texto)
+        _logger.LogInformation(
+            "Transação {TransactionId} registrada: {Type} {Quantity} de {Ticker} na carteira {WalletId}",
+            transaction.Id, transaction.Type, transaction.Quantity, asset.Ticker, walletId);
+
         return transaction.ToResponse(asset.Ticker);
     }
 
@@ -87,6 +95,8 @@ public class TransactionService : ITransactionService
             await _transactions.RemoveAsync(transaction, ct);
             return true;
         }, ct);
+
+        _logger.LogInformation("Transação {TransactionId} removida da carteira {WalletId}", id, walletId);
     }
 
     private async Task EnsureWalletExistsAsync(Guid walletId, CancellationToken ct)

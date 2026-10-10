@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
 namespace InvestWallet.Api.Middleware;
@@ -5,10 +6,17 @@ namespace InvestWallet.Api.Middleware;
 /// <summary>Monta todas as respostas de erro no mesmo formato (RFC 7807), sempre com traceId.</summary>
 public static class ErrorResponses
 {
+    /// <summary>
+    /// Id que liga a resposta ao log. Usa o TraceId do padrão W3C (32 hex, o mesmo que aparece em outras
+    /// ferramentas de observabilidade); cai para o id da requisição se não houver Activity.
+    /// </summary>
+    public static string GetTraceId(HttpContext context) =>
+        Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
+
     public static ProblemDetails Create(HttpContext context, int status, string title, string detail)
     {
         var problem = new ProblemDetails { Status = status, Title = title, Detail = detail, Instance = context.Request.Path };
-        problem.Extensions["traceId"] = context.TraceIdentifier;
+        problem.Extensions["traceId"] = GetTraceId(context);
         return problem;
     }
 
@@ -21,7 +29,7 @@ public static class ErrorResponses
             Detail = "Um ou mais campos são inválidos. Veja 'errors' para os detalhes.",
             Instance = context.Request.Path
         };
-        problem.Extensions["traceId"] = context.TraceIdentifier;
+        problem.Extensions["traceId"] = GetTraceId(context);
         return problem;
     }
 

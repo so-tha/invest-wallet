@@ -13,3 +13,9 @@ dotnet ef database update --project src/InvestWallet.Infrastructure --startup-pr
 dotnet run --project src/InvestWallet.Api
 ```
 Health check: `GET /health`.
+
+## Logs
+- **Development:** texto legível no console, com o `TraceId` em cada linha. Para ver o SQL do EF, defina em `appsettings.Development.json`: `"Serilog": { "MinimumLevel": { "Override": { "Microsoft.EntityFrameworkCore.Database.Command": "Information" } } }`.
+- **Outros ambientes:** JSON, um evento por linha, pronto para ser coletado.
+- Toda resposta de erro traz um `traceId`; filtre o log por ele para ver tudo o que aconteceu naquela requisição.
+- Nunca são registrados corpos de requisição nem valores de parâmetros SQL.

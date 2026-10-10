@@ -37,11 +37,13 @@ public class GlobalExceptionHandler : IExceptionHandler
 
             case ConflictException:
                 status = StatusCodes.Status409Conflict;
+                _logger.LogWarning("Conflito em {Method} {Path}: {Reason}", context.Request.Method, context.Request.Path, exception.Message);
                 body = ErrorResponses.Create(context, status, "Conflito com o estado atual", exception.Message);
                 break;
 
             case DomainException: // 422: a requisição é válida, mas o negócio não permite
                 status = StatusCodes.Status422UnprocessableEntity;
+                _logger.LogWarning("Regra de negócio violada em {Method} {Path}: {Reason}", context.Request.Method, context.Request.Path, exception.Message);
                 body = ErrorResponses.Create(context, status, "Regra de negócio violada", exception.Message);
                 break;
 

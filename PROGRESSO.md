@@ -29,7 +29,7 @@
 - [x] 3. CRUD de Carteiras e Ativos
 - [x] 4. Transações + regras de negócio (compra/venda, posição, preço médio)
 - [x] 5. Validações (FluentValidation → 400) e refinar erros. *(GlobalExceptionHandler com ProblemDetails já feito na etapa 3)*
-- [ ] 6. Logs estruturados
+- [x] 6. Logs estruturados
 - [ ] 7. Testes automatizados (unitários + integração)
 - [ ] 8. Swagger/OpenAPI documentado
 - [ ] 9. README, Dockerfile da API, GitHub Actions
@@ -37,7 +37,7 @@
 - [ ] 11. Revisão final e docs/ESTUDO.md
 
 ## Próxima etapa
-Etapa 6: Logs estruturados (Serilog, correlação por traceId).
+Etapa 7: Testes automatizados (unitários dos serviços/validadores + integração dos endpoints com Postgres de teste).
 
 ## Decisões e suposições
 - PostgreSQL em Docker (a vaga não especifica banco) — suposição.
@@ -58,3 +58,5 @@ Etapa 6: Logs estruturados (Serilog, correlação por traceId).
 - Etapa 5 concluída: FluentValidation (400), domínio (422), banco (409 via SqlState 23505/23503). Corrida de ticker: 8 POSTs simultâneos → 1×201 + 7×409.
 - Limitação conhecida: se o JSON tem um campo de tipo inválido (ex.: enum "Banana"), o MVC reporta só esse erro e os demais campos só aparecem depois de corrigi-lo (a desserialização falha antes da validação).
 - Para a etapa 6: o EF registra em nível `fail` os erros de unicidade que depois viram 409 (ruído no log); ajustar o nível da categoria `Microsoft.EntityFrameworkCore.Update`.
+- Etapa 6 concluída: Serilog (texto em Development, JSON nos demais ambientes), `TraceId` W3C em toda linha e na resposta de erro, log de negócio na criação/remoção de transações. Provado: banco derrubado → 500 com traceId → 4 linhas no log com o mesmo id.
+- Para a etapa 7: `Program` precisa ser `public partial` para o `WebApplicationFactory`; os validadores e `TransactionService` (agora com `ILogger`) pedem testes; usar `NullLogger<T>` e `FakeTimeProvider`.

@@ -61,6 +61,15 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 ### P17. O que é ProblemDetails e por que padronizar o formato de erro? 🟢 (etapas 3 e 5)
 **Resposta-guia:** É o padrão RFC 7807/9457 para erros de API em JSON (`title`, `status`, `detail`, `instance`, e extensões como `errors` e `traceId`). Padronizar permite ao cliente tratar *todo* erro do mesmo jeito. O `traceId` liga a resposta ao log do servidor, e por isso 500 mostra uma mensagem genérica ao usuário (segurança) e o detalhe fica só no log.
 
+### P18. Qual a diferença entre log de texto e log estruturado? Por que usar `{Campo}` em vez de interpolar string? 🟢 (etapa 6)
+**Resposta-guia:** No log de texto a informação está "achatada" numa frase; para achar algo é preciso fazer busca textual frágil. No log **estruturado**, cada evento é um registro com *propriedades* (`TransactionId`, `Ticker`, `WalletId`, `StatusCode`, `Elapsed`), gravado em JSON em produção, então ferramentas (Seq, Elastic, Datadog, Application Insights) filtram e agregam por campo: "todos os 500 de `/api/wallets` com mais de 1 s". Por isso escrevo `LogInformation("Transação {TransactionId} registrada", id)` (*message template*) e **não** `$"Transação {id} registrada"`: com o template, `TransactionId` vira propriedade pesquisável e o template (constante) agrupa eventos iguais; a interpolação gera uma string diferente a cada vez e perde a estrutura.
+
+### P19. Como você acha a causa de um erro 500 reportado por um usuário? 🟢 (etapa 6)
+**Resposta-guia:** A resposta de erro devolve um `traceId`. O usuário (ou o front-end) me informa esse id e eu busco por ele no log: todas as linhas daquela requisição carregam o mesmo `TraceId`, inclusive a exceção com stack trace, o SQL que falhou e a linha-resumo com status e duração. Testei: derrubei o banco, a API devolveu 500 genérico com `traceId`, e filtrando por ele encontrei as 4 linhas da falha. Em sistemas distribuídos esse id segue o padrão W3C Trace Context e atravessa vários serviços.
+
+### P20. O que não se deve registrar em log, e que níveis usar? 🟢 (etapa 6)
+**Resposta-guia:** Nunca registrar segredos (senhas, tokens, connection strings), dados pessoais/sensíveis (LGPD) nem corpos de requisição inteiros; o EF só imprime valores de parâmetros com `EnableSensitiveDataLogging`, que fica desligado. Níveis: `Information` = fluxo normal e fatos de negócio; `Warning` = algo inesperado mas tratado e causado pelo cliente (409/422); `Error` = falha nossa que precisa de atenção (500); `Fatal` = a aplicação não consegue continuar. Erros esperados (validação, "não encontrado") **não** devem ser `Error` com stack trace, senão o alerta perde o sentido: eu mesmo precisei silenciar o middleware do ASP.NET que registrava todo 422 como erro.
+
 *(Novas perguntas serão adicionadas a cada etapa.)*
 
 ---
@@ -144,6 +153,19 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - **`OperationCanceledException`:** quando o cliente desiste da requisição, não é erro do servidor; ignoramos em vez de registrar como falha.
 - **Versões fixas de pacotes:** `Version="8.0.*"` muda o build sem você perceber; fixar a versão exata torna o build reproduzível.
 
+### Etapa 6: logs
+- **Serilog:** biblioteca de logging estruturado. Configurada pelo `appsettings.json` (níveis, destinos, formato), então mudar o comportamento não exige recompilar.
+- **Sink:** destino do log (console, arquivo, Seq, Elastic...). Usei o console: em containers a prática é escrever em `stdout` e deixar a plataforma coletar.
+- **`RenderedCompactJsonFormatter`:** um evento por linha, em JSON (`@t` data, `@l` nível, `@m` mensagem, `@x` exceção + propriedades). Em desenvolvimento uso um formato legível.
+- **Nível mínimo e `Override`:** `Default: Information`, mas bibliotecas barulhentas (`Microsoft.*`, `System.*`) ficam em `Warning`; é possível ajustar por categoria.
+- **`LogContext.PushProperty`:** anexa uma propriedade (o `TraceId`) a toda linha escrita dentro do bloco `using`, sem precisar passá-la de método em método.
+- **`UseSerilogRequestLogging`:** uma linha-resumo por requisição (método, rota, status, duração). Health checks são rebaixados para não poluir.
+- **Ordem do pipeline:** o log de requisição fica antes do tratador de exceções, para registrar o status final; o contexto do `TraceId` fica antes de tudo.
+- **TraceId (W3C Trace Context):** 32 caracteres hexadecimais gerados por requisição (`Activity.Current.TraceId`). Aparece na resposta de erro e em cada linha de log.
+- **Bootstrap logger:** logger mínimo para registrar falhas de inicialização (ex.: connection string ausente), antes da configuração completa existir. `Log.CloseAndFlush()` no `finally` garante que as últimas linhas não se percam.
+- **`GetLevel` personalizado:** decide o nível de cada requisição (erro de servidor → `Error`; `/health` → `Verbose`, ou seja, oculto).
+- **12-Factor App (logs):** a aplicação não gerencia arquivos de log; escreve eventos no fluxo padrão e o ambiente os coleta.
+
 *(Novos conceitos serão adicionados a cada etapa.)*
 
 ---
@@ -164,6 +186,8 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - `.env` com `;` sem aspas quebrou `source .env`: o shell tratou `;` como separador. Solução: aspas. Lição: um health check que não toca no banco não prova que o banco está configurado.
 - `dotnet ef migrations script --no-build` gerou script vazio: usou binário antigo, anterior à migration. Lição: recompile depois de criar a migration.
 - Ao tentar provar que a trava de concorrência era necessária, usei `wait $(jobs -p ...)` e o script esperou o próprio servidor da API para sempre, deixando o código com a trava desativada. Parei a tarefa, restaurei o arquivo de um backup e confirmei com `grep`. Lição: antes de um experimento destrutivo, guarde backup e planeje a restauração; e `wait` sem PIDs específicos espera todos os processos em segundo plano.
+- O primeiro log que vi tinha **todo 422/409/400 como `ERR` com stack trace**: o middleware do ASP.NET registra como erro qualquer exceção, mesmo quando um `IExceptionHandler` a trata. Só percebi porque olhei o log de verdade em vez de supor que estava certo. Solução: silenciar essa categoria e deixar o nosso tratador decidir o nível.
+- O NuGet escolheu `Serilog.AspNetCore 10.0.0` (para .NET 10) num projeto .NET 8. Sem `--version`, o NuGet pega a versão mais recente, que pode não casar com o seu runtime; troquei para a linha 8.x.
 - Repeti o erro do `pkill -f`: usei `pgrep -f "InvestWallet.Api.dll"` num laço com `kill`, e ele também casou com o shell que rodava o comando (a linha de comando continha o texto), que foi encerrado (código 144). Lição: para achar um processo, use a porta (`ss -ltnp 'sport = :5265'`) ou guarde o PID ao iniciar. Além disso, `wait %2 %3...` esperou jobs errados; o correto é guardar os PIDs em um array e fazer `wait $PIDS`.
 - Adicionei pacotes com `--version '8.0.*'` e o `.csproj` ficou com versão flutuante; só percebi na etapa 5 e fixei todas as versões.
 - `pkill -f nome` matou o próprio shell, porque a linha de comando continha o mesmo texto. Lição: guarde o PID (`$!`) e use `kill`.
