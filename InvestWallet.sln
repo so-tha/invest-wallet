@@ -1,0 +1,64 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{430B86C8-70E1-4469-B7EE-2D111558E23B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InvestWallet.Api", "src\InvestWallet.Api\InvestWallet.Api.csproj", "{8ECFCE05-5BDA-4387-9251-D98C25685217}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InvestWallet.Application", "src\InvestWallet.Application\InvestWallet.Application.csproj", "{681380B9-4369-4FCC-9434-D6169AAF954F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InvestWallet.Domain", "src\InvestWallet.Domain\InvestWallet.Domain.csproj", "{CD2037F1-B036-43CC-9413-D7BC5F628AD9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InvestWallet.Infrastructure", "src\InvestWallet.Infrastructure\InvestWallet.Infrastructure.csproj", "{05177CAF-4E5F-46F6-ABD7-3080B3513812}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{35B5C897-F838-4043-A7F7-0466F4D04F52}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InvestWallet.IntegrationTests", "tests\InvestWallet.IntegrationTests\InvestWallet.IntegrationTests.csproj", "{BD477874-BB0A-4E2A-9C81-AD75E079BC83}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InvestWallet.UnitTests", "tests\InvestWallet.UnitTests\InvestWallet.UnitTests.csproj", "{9DC92968-6DC9-463A-982C-05D6A8673DB2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8ECFCE05-5BDA-4387-9251-D98C25685217}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8ECFCE05-5BDA-4387-9251-D98C25685217}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8ECFCE05-5BDA-4387-9251-D98C25685217}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8ECFCE05-5BDA-4387-9251-D98C25685217}.Release|Any CPU.Build.0 = Release|Any CPU
+		{681380B9-4369-4FCC-9434-D6169AAF954F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{681380B9-4369-4FCC-9434-D6169AAF954F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{681380B9-4369-4FCC-9434-D6169AAF954F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{681380B9-4369-4FCC-9434-D6169AAF954F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CD2037F1-B036-43CC-9413-D7BC5F628AD9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CD2037F1-B036-43CC-9413-D7BC5F628AD9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CD2037F1-B036-43CC-9413-D7BC5F628AD9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CD2037F1-B036-43CC-9413-D7BC5F628AD9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{05177CAF-4E5F-46F6-ABD7-3080B3513812}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{05177CAF-4E5F-46F6-ABD7-3080B3513812}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{05177CAF-4E5F-46F6-ABD7-3080B3513812}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{05177CAF-4E5F-46F6-ABD7-3080B3513812}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BD477874-BB0A-4E2A-9C81-AD75E079BC83}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BD477874-BB0A-4E2A-9C81-AD75E079BC83}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BD477874-BB0A-4E2A-9C81-AD75E079BC83}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BD477874-BB0A-4E2A-9C81-AD75E079BC83}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9DC92968-6DC9-463A-982C-05D6A8673DB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9DC92968-6DC9-463A-982C-05D6A8673DB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9DC92968-6DC9-463A-982C-05D6A8673DB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9DC92968-6DC9-463A-982C-05D6A8673DB2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{8ECFCE05-5BDA-4387-9251-D98C25685217} = {430B86C8-70E1-4469-B7EE-2D111558E23B}
+		{681380B9-4369-4FCC-9434-D6169AAF954F} = {430B86C8-70E1-4469-B7EE-2D111558E23B}
+		{CD2037F1-B036-43CC-9413-D7BC5F628AD9} = {430B86C8-70E1-4469-B7EE-2D111558E23B}
+		{05177CAF-4E5F-46F6-ABD7-3080B3513812} = {430B86C8-70E1-4469-B7EE-2D111558E23B}
+		{BD477874-BB0A-4E2A-9C81-AD75E079BC83} = {35B5C897-F838-4043-A7F7-0466F4D04F52}
+		{9DC92968-6DC9-463A-982C-05D6A8673DB2} = {35B5C897-F838-4043-A7F7-0466F4D04F52}
+	EndGlobalSection
+EndGlobal
