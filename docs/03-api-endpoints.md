@@ -24,3 +24,15 @@ Convenções: 400 = entrada inválida; 404 = não encontrado; 409 = conflito de 
 - `POST .../transactions`: `404` se a **carteira** não existe (está na URL); `422` se o **ativo** enviado no corpo não existe ou se a regra de saldo/data for violada.
 - `GET .../positions` devolve só posições abertas (quantidade > 0), ordenadas por ticker.
 - `executedAt` aceita ISO 8601 com fuso (ex.: `2026-01-10T12:00:00Z`) e é gravado em UTC.
+
+## Formato de erro (todas as respostas 4xx/5xx)
+`application/problem+json` com `title`, `status`, `detail`, `instance` e `traceId`.
+Erros 400 incluem `errors`: `{ "campo": ["mensagem", ...] }` (nomes em camelCase, como no JSON).
+
+| Status | Quando | Exemplo |
+|---|---|---|
+| 400 | Requisição inválida (dá para decidir sem consultar o estado do sistema) | nome vazio, quantidade ≤ 0, mais de 6 casas decimais, data futura, JSON malformado, enum inexistente |
+| 404 | Recurso da URL não existe | carteira inexistente |
+| 409 | Conflito com o estado atual | ticker duplicado, excluir ativo/carteira com transações |
+| 422 | Regra de negócio violada | vender mais do que possui, ativo do corpo inexistente |
+| 500 | Erro inesperado | mensagem genérica; detalhe só no log |

@@ -1,7 +1,7 @@
+using FluentValidation;
 using InvestWallet.Application.Exceptions;
 using InvestWallet.Domain.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.Mvc;
 
 namespace InvestWallet.Api.Middleware;
 
@@ -17,30 +17,47 @@ public class GlobalExceptionHandler : IExceptionHandler
 
     public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken ct)
     {
-        var (status, title) = exception switch
-        {
-            NotFoundException => (StatusCodes.Status404NotFound, "Recurso não encontrado"),
-            ConflictException => (StatusCodes.Status409Conflict, "Conflito com o estado atual"),
-            DomainException => (StatusCodes.Status422UnprocessableEntity, "Regra de negócio violada"),
-            _ => (StatusCodes.Status500InternalServerError, "Erro interno do servidor")
-        };
+        object body;
+        int status;
 
-        if (status == StatusCodes.Status500InternalServerError)
-            _logger.LogError(exception, "Erro não tratado em {Method} {Path}", context.Request.Method, context.Request.Path);
-
-        var problem = new ProblemDetails
+        switch (exception)
         {
-            Status = status,
-            Title = title,
-            // Mensagens de 4xx são nossas e seguras; no 500 nunca expomos a mensagem da exceção.
-            Detail = status == StatusCodes.Status500InternalServerError
-                ? "Ocorreu um erro inesperado. Tente novamente mais tarde."
-                : exception.Message,
-            Instance = context.Request.Path
-        };
+            case ValidationException validation: // 400: a requisição em si é inválida
+                status = StatusCodes.Status400BadRequest;
+                var errors = validation.Errors
+                    .GroupBy(e => ErrorResponses.ToCamelCase(e.PropertyName))
+                    .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).Distinct().ToArray());
+                body = ErrorResponses.CreateValidation(context, errors);
+                break;
+
+            case NotFoundException:
+                status = StatusCodes.Status404NotFound;
+                body = ErrorResponses.Create(context, status, "Recurso não encontrado", exception.Message);
+                break;
+
+            case ConflictException:
+                status = StatusCodes.Status409Conflict;
+                body = ErrorResponses.Create(context, status, "Conflito com o estado atual", exception.Message);
+                break;
+
+            case DomainException: // 422: a requisição é válida, mas o negócio não permite
+                status = StatusCodes.Status422UnprocessableEntity;
+                body = ErrorResponses.Create(context, status, "Regra de negócio violada", exception.Message);
+                break;
+
+            case OperationCanceledException when context.RequestAborted.IsCancellationRequested:
+                return true; // o cliente desistiu da requisição: não há ninguém para responder e não é erro nosso
+
+            default: // 500: nunca expomos a mensagem da exceção; ela vai só para o log
+                status = StatusCodes.Status500InternalServerError;
+                _logger.LogError(exception, "Erro não tratado em {Method} {Path}", context.Request.Method, context.Request.Path);
+                body = ErrorResponses.Create(context, status, "Erro interno do servidor",
+                    "Ocorreu um erro inesperado. Informe o traceId ao suporte.");
+                break;
+        }
 
         context.Response.StatusCode = status;
-        await context.Response.WriteAsJsonAsync(problem, options: null, contentType: "application/problem+json", ct);
+        await context.Response.WriteAsJsonAsync(body, body.GetType(), options: null, contentType: "application/problem+json", ct);
         return true; // true = já tratei, não propague
     }
 }

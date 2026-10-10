@@ -1,3 +1,4 @@
+using FluentValidation;
 using InvestWallet.Application.Common;
 using InvestWallet.Application.Exceptions;
 using InvestWallet.Domain.Entities;
@@ -7,8 +8,13 @@ namespace InvestWallet.Application.Assets;
 public class AssetService : IAssetService
 {
     private readonly IAssetRepository _assets;
+    private readonly IValidator<AssetRequest> _validator;
 
-    public AssetService(IAssetRepository assets) => _assets = assets;
+    public AssetService(IAssetRepository assets, IValidator<AssetRequest> validator)
+    {
+        _assets = assets;
+        _validator = validator;
+    }
 
     public async Task<PagedResult<AssetResponse>> ListAsync(int page, int pageSize, CancellationToken ct)
     {
@@ -22,6 +28,7 @@ public class AssetService : IAssetService
 
     public async Task<AssetResponse> CreateAsync(AssetRequest request, CancellationToken ct)
     {
+        await _validator.ValidateAndThrowAsync(request, ct);
         // Criamos a entidade primeiro: ela normaliza o ticker (maiúsculo) e valida.
         var asset = new Asset(request.Ticker, request.Name, request.Type);
         await EnsureTickerIsFreeAsync(asset.Ticker, null, ct);
@@ -31,6 +38,7 @@ public class AssetService : IAssetService
 
     public async Task<AssetResponse> UpdateAsync(Guid id, AssetRequest request, CancellationToken ct)
     {
+        await _validator.ValidateAndThrowAsync(request, ct);
         var asset = await GetOrThrowAsync(id, ct);
         asset.Update(request.Ticker, request.Name, request.Type);
         await EnsureTickerIsFreeAsync(asset.Ticker, id, ct);

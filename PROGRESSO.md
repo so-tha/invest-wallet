@@ -28,7 +28,7 @@
 - [x] 2. Banco de dados: entidades, DbContext, migration inicial
 - [x] 3. CRUD de Carteiras e Ativos
 - [x] 4. Transações + regras de negócio (compra/venda, posição, preço médio)
-- [ ] 5. Validações (FluentValidation → 400) e refinar erros. *(GlobalExceptionHandler com ProblemDetails já feito na etapa 3)*
+- [x] 5. Validações (FluentValidation → 400) e refinar erros. *(GlobalExceptionHandler com ProblemDetails já feito na etapa 3)*
 - [ ] 6. Logs estruturados
 - [ ] 7. Testes automatizados (unitários + integração)
 - [ ] 8. Swagger/OpenAPI documentado
@@ -37,7 +37,7 @@
 - [ ] 11. Revisão final e docs/ESTUDO.md
 
 ## Próxima etapa
-Etapa 5: Validações (FluentValidation → 400) e refinar tratamento de erros.
+Etapa 6: Logs estruturados (Serilog, correlação por traceId).
 
 ## Decisões e suposições
 - PostgreSQL em Docker (a vaga não especifica banco) — suposição.
@@ -55,3 +55,6 @@ Etapa 5: Validações (FluentValidation → 400) e refinar tratamento de erros.
 - Etapa 4: provei com 6 vendas paralelas que sem a trava o saldo fica negativo (−40) e com a trava só 2 de 6 passam. Experimento exigiu parar e restaurar o arquivo (ver ESTUDO.md, seção 4).
 - Etapa 4: 14 testes unitários do `PositionCalculator` já escritos (a etapa 7 cobrirá serviços e integração/endpoints).
 - Pendência etapa 5: quantidade/preço com mais de 6 casas ou 0 hoje dão 422; devem ser 400 (validação de entrada). O enum inválido continua com mensagem confusa.
+- Etapa 5 concluída: FluentValidation (400), domínio (422), banco (409 via SqlState 23505/23503). Corrida de ticker: 8 POSTs simultâneos → 1×201 + 7×409.
+- Limitação conhecida: se o JSON tem um campo de tipo inválido (ex.: enum "Banana"), o MVC reporta só esse erro e os demais campos só aparecem depois de corrigi-lo (a desserialização falha antes da validação).
+- Para a etapa 6: o EF registra em nível `fail` os erros de unicidade que depois viram 409 (ruído no log); ajustar o nível da categoria `Microsoft.EntityFrameworkCore.Update`.

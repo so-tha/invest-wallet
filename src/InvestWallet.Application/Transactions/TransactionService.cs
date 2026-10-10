@@ -1,3 +1,4 @@
+using FluentValidation;
 using InvestWallet.Application.Assets;
 using InvestWallet.Application.Common;
 using InvestWallet.Application.Exceptions;
@@ -13,15 +14,16 @@ public class TransactionService : ITransactionService
     private readonly ITransactionRepository _transactions;
     private readonly IWalletRepository _wallets;
     private readonly IAssetRepository _assets;
-    private readonly TimeProvider _clock;
+    private readonly IValidator<TransactionRequest> _validator;
 
     public TransactionService(
-        ITransactionRepository transactions, IWalletRepository wallets, IAssetRepository assets, TimeProvider clock)
+        ITransactionRepository transactions, IWalletRepository wallets, IAssetRepository assets,
+        IValidator<TransactionRequest> validator)
     {
         _transactions = transactions;
         _wallets = wallets;
         _assets = assets;
-        _clock = clock;
+        _validator = validator;
     }
 
     public async Task<PagedResult<TransactionResponse>> ListAsync(
@@ -46,6 +48,7 @@ public class TransactionService : ITransactionService
 
     public async Task<TransactionResponse> CreateAsync(Guid walletId, TransactionRequest request, CancellationToken ct)
     {
+        await _validator.ValidateAndThrowAsync(request, ct); // 400 antes de gastar consulta ao banco
         await EnsureWalletExistsAsync(walletId, ct);
 
         // O ativo vem no corpo (não na URL): se não existe, a requisição é bem formada mas inprocessável (422).
@@ -53,8 +56,6 @@ public class TransactionService : ITransactionService
             ?? throw new DomainException($"Ativo {request.AssetId} não encontrado.");
 
         var executedAt = request.ExecutedAt.UtcDateTime; // Npgsql exige UTC em timestamptz
-        if (executedAt > _clock.GetUtcNow().UtcDateTime)
-            throw new DomainException("A data da transação não pode estar no futuro."); // RN7
 
         var transaction = new Transaction(walletId, asset.Id, request.Type, request.Quantity, request.UnitPrice, executedAt);
 

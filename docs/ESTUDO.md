@@ -18,8 +18,9 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 ### P3. Por que repetir a regra `quantidade > 0` no C# e também no banco? Não é duplicação? 🟢 (etapa 2)
 **Resposta-guia:** É *defesa em profundidade*. A regra no C# dá feedback rápido e mensagens claras ao usuário. A restrição `CHECK` no banco protege os dados mesmo se alguém inserir por SQL direto, por outro serviço, por um script de migração ou por um bug em outra camada. O banco é o último guardião: dado inválido nunca persiste. O custo é pequeno e o ganho em integridade é grande.
 
-### P4. Qual a diferença entre 400, 409 e 422? 🟡 (etapas 3 e 5)
+### P4. Qual a diferença entre 400, 409 e 422? 🟢 (etapas 3 e 5)
 **Resposta-guia:** `400 Bad Request`: a requisição está malformada ou inválida (campo faltando, tipo errado, texto grande demais). `409 Conflict`: a requisição é válida, mas conflita com o estado atual (ticker já existe, apagar carteira que tem transações). `422 Unprocessable Entity`: a requisição é bem formada, mas viola uma regra de negócio (vender mais do que possui). Regra prática: 400 = "não entendi/está inválido"; 409 = "o estado atual impede"; 422 = "entendi, mas o negócio não permite".
+**Critério que usei no projeto:** se dá para decidir olhando só a requisição (e o relógio), é *validação* e vira 400 (nome vazio, quantidade ≤ 0, data no futuro). Se precisa consultar o estado do sistema (saldo, existência de registro), é *regra de negócio*: 422 ou 409.
 
 ### P5. Por que o controller não tem regra de negócio? 🟢 (etapa 3)
 **Resposta-guia:** O controller só traduz HTTP: lê a requisição, chama um serviço e devolve o status certo. A regra (ticker único, não apagar carteira com transações) fica no serviço e na entidade, porque assim posso testá-la sem subir servidor nem banco, e reaproveitá-la se amanhã houver outra porta de entrada (fila, CLI, gRPC). É o princípio de *responsabilidade única* (o "S" do SOLID).
@@ -47,6 +48,18 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 
 ### P13. Por que testar o `PositionCalculator` sem banco? 🟢 (etapa 4)
 **Resposta-guia:** Porque é uma função pura: dadas as transações, devolve a posição. Os 14 testes rodam em ~50 ms, sem Docker. Isso só é possível porque a regra mora no Domain e não depende de infraestrutura, que é o resultado prático da arquitetura em camadas.
+
+### P14. Com milhões de transações por carteira, calcular a posição do zero a cada consulta seria viável? 🟢 (etapa 4)
+**Resposta-guia:** Não. O custo cresce linearmente com o histórico. E não dá para simplesmente dividir o trabalho entre requisições, porque o preço médio é *sequencial*: cada transação depende do estado deixado pela anterior. O que se faz é não recalcular do zero: guardar um *snapshot* da posição (ex.: a cada N transações, ou uma tabela de resumo atualizada **na mesma transação de banco** em que a transação é gravada) e calcular só o que veio depois dele; ou usar cache com invalidação. A contrapartida é voltar a ter dois dados que podem divergir, por isso só se adota quando a medição mostra que é necessário (evitar otimização prematura).
+
+### P15. Onde você valida: no controller, no serviço, no domínio ou no banco? 🟢 (etapa 5)
+**Resposta-guia:** Em camadas, cada uma com um papel. **Borda (FluentValidation, na Application):** formato e limites do que o cliente enviou, com mensagens claras e *todos* os erros de uma vez → 400. **Domínio:** invariantes da entidade e regras de negócio ("não vender mais do que possui") → 422; é a última defesa em código. **Banco:** `CHECK`, `UNIQUE` e chaves estrangeiras; a defesa final, inclusive contra concorrência. Validar na borda dá boa experiência ao usuário; validar no domínio e no banco garante a integridade mesmo que outra porta de entrada seja criada no futuro.
+
+### P16. Você checa "o ticker já existe?" antes de inserir. Isso basta? 🟢 (etapa 5)
+**Resposta-guia:** Não. Entre o `SELECT` e o `INSERT` outra requisição pode inserir o mesmo ticker (*check-then-act*, uma condição de corrida). A checagem existe para dar uma mensagem amigável no caso comum, mas quem garante a unicidade é o **índice único do banco**. Quando ele rejeita (erro `23505` do PostgreSQL), eu traduzo para 409 em vez de deixar virar 500. Testei: 8 POSTs simultâneos do mesmo ticker resultaram em 1× 201 e 7× 409, com 1 linha no banco.
+
+### P17. O que é ProblemDetails e por que padronizar o formato de erro? 🟢 (etapas 3 e 5)
+**Resposta-guia:** É o padrão RFC 7807/9457 para erros de API em JSON (`title`, `status`, `detail`, `instance`, e extensões como `errors` e `traceId`). Padronizar permite ao cliente tratar *todo* erro do mesmo jeito. O `traceId` liga a resposta ao log do servidor, e por isso 500 mostra uma mensagem genérica ao usuário (segurança) e o detalhe fica só no log.
 
 *(Novas perguntas serão adicionadas a cada etapa.)*
 
@@ -118,6 +131,19 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - **`Include` (eager loading):** pede ao EF para trazer a entidade relacionada (o `Asset`) no mesmo SELECT, evitando consultas extras (problema N+1).
 - **422 para referência inexistente no corpo:** se o `assetId` enviado não existe, a URL é válida mas o conteúdo não é processável.
 
+### Etapa 5: validação e erros
+- **FluentValidation:** validação declarativa em classes `AbstractValidator<T>` (`RuleFor(x => x.Name).NotEmpty()...`), separada do modelo. Todas as regras são executadas e os erros voltam juntos.
+- **`ValidateAndThrowAsync`:** executa o validador e lança `ValidationException` se houver erro; o `GlobalExceptionHandler` a converte em 400.
+- **`Cascade(CascadeMode.Stop)`:** para na primeira regra que falha em uma propriedade, evitando erros redundantes (ex.: "maior que zero" e "casas decimais" para o mesmo valor).
+- **`PrecisionScale(18, 6, ...)`:** valida total de dígitos e casas decimais; espelha o `numeric(18,6)` do banco.
+- **`AddValidatorsFromAssemblyContaining<T>()`:** registra na DI todos os validadores do projeto automaticamente.
+- **`SuppressImplicitRequiredAttributeForNonNullableReferenceTypes`:** impede o MVC de criar validação própria (em inglês) para tipos não anuláveis; centralizamos tudo no FluentValidation.
+- **`InvalidModelStateResponseFactory`:** personaliza a resposta quando o MVC não consegue montar o objeto (JSON malformado, enum inexistente, `?page=abc`).
+- **`ModelBindingMessageProvider`:** traduz as mensagens de erro do próprio MVC.
+- **`SaveChangesAsync` sobrescrito:** captura `DbUpdateException` com `PostgresException` e traduz por `SqlState` (`23505` = violação de unicidade, `23503` = violação de chave estrangeira) em `ConflictException`.
+- **`OperationCanceledException`:** quando o cliente desiste da requisição, não é erro do servidor; ignoramos em vez de registrar como falha.
+- **Versões fixas de pacotes:** `Version="8.0.*"` muda o build sem você perceber; fixar a versão exata torna o build reproduzível.
+
 *(Novos conceitos serão adicionados a cada etapa.)*
 
 ---
@@ -138,4 +164,6 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - `.env` com `;` sem aspas quebrou `source .env`: o shell tratou `;` como separador. Solução: aspas. Lição: um health check que não toca no banco não prova que o banco está configurado.
 - `dotnet ef migrations script --no-build` gerou script vazio: usou binário antigo, anterior à migration. Lição: recompile depois de criar a migration.
 - Ao tentar provar que a trava de concorrência era necessária, usei `wait $(jobs -p ...)` e o script esperou o próprio servidor da API para sempre, deixando o código com a trava desativada. Parei a tarefa, restaurei o arquivo de um backup e confirmei com `grep`. Lição: antes de um experimento destrutivo, guarde backup e planeje a restauração; e `wait` sem PIDs específicos espera todos os processos em segundo plano.
+- Repeti o erro do `pkill -f`: usei `pgrep -f "InvestWallet.Api.dll"` num laço com `kill`, e ele também casou com o shell que rodava o comando (a linha de comando continha o texto), que foi encerrado (código 144). Lição: para achar um processo, use a porta (`ss -ltnp 'sport = :5265'`) ou guarde o PID ao iniciar. Além disso, `wait %2 %3...` esperou jobs errados; o correto é guardar os PIDs em um array e fazer `wait $PIDS`.
+- Adicionei pacotes com `--version '8.0.*'` e o `.csproj` ficou com versão flutuante; só percebi na etapa 5 e fixei todas as versões.
 - `pkill -f nome` matou o próprio shell, porque a linha de comando continha o mesmo texto. Lição: guarde o PID (`$!`) e use `kill`.
