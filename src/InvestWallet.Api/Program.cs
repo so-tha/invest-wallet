@@ -1,11 +1,17 @@
 using System.Text.Json.Serialization;
+using FluentValidation;
 using InvestWallet.Api.Middleware;
+using InvestWallet.Api.Observability;
 using InvestWallet.Api.Swagger;
 using InvestWallet.Application;
+using InvestWallet.Application.Exceptions;
+using InvestWallet.Domain.Exceptions;
 using InvestWallet.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
+using Sentry;
+using Sentry.Extensibility;
 using Serilog.Context;
 
 // Logger mínimo só para registrar falhas de inicialização (ex.: connection string ausente),
@@ -21,6 +27,28 @@ try
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services)
         .Enrich.FromLogContext());
+
+    // Sentry: rastreamento de erros (docs/adr/0006). O DSN vem de "Sentry:Dsn" (variável Sentry__Dsn);
+    // SEM DSN o SDK fica desativado e nada sai da aplicação (desenvolvimento, testes e CI).
+    builder.WebHost.UseSentry(options =>
+    {
+        // ATENÇÃO: o SDK LANÇA exceção ao iniciar se o DSN for nulo; só desativa com string vazia explícita.
+        // Por isso, sem DSN configurado, definimos "" de propósito (descoberto por teste, não pela documentação).
+        options.Dsn = builder.Configuration["Sentry:Dsn"] ?? "";
+        options.SendDefaultPii = false;                // não envia IP, cookies, cabeçalhos de autenticação...
+        options.MaxRequestBodySize = RequestSize.None; // nunca envia o corpo das requisições
+        options.TracesSampleRate = 0;                  // só erros: sem monitoramento de desempenho
+        options.AutoSessionTracking = false;
+        options.AddEventProcessor(new SentryEventScrubber()); // limpa segredos antes do envio
+
+        // O SDK captura até as exceções que o nosso tratador converte em 4xx. Esses erros são o sistema funcionando
+        // (validação, não encontrado, conflito, regra de negócio): no Sentry, só os 500 interessam.
+        options.AddExceptionFilterForType<NotFoundException>();
+        options.AddExceptionFilterForType<ConflictException>();
+        options.AddExceptionFilterForType<DomainException>();
+        options.AddExceptionFilterForType<ValidationException>();
+        options.AddExceptionFilterForType<OperationCanceledException>(); // cliente desistiu da requisição
+    });
 
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
@@ -86,7 +114,12 @@ try
     // 1) Põe o TraceId em TODA linha de log escrita durante esta requisição
     app.Use(async (context, next) =>
     {
-        using (LogContext.PushProperty("TraceId", ErrorResponses.GetTraceId(context)))
+        var traceId = ErrorResponses.GetTraceId(context);
+
+        // O mesmo id vai como tag no Sentry: do erro no Sentry chega-se à linha do log, e vice-versa
+        context.RequestServices.GetRequiredService<IHub>().ConfigureScope(scope => scope.SetTag("trace_id", traceId));
+
+        using (LogContext.PushProperty("TraceId", traceId))
             await next();
     });
 

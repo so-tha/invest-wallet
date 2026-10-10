@@ -1,6 +1,6 @@
 using System.Net;
 using InvestWallet.Application.Wallets;
-using InvestWallet.Domain.Entities;
+using InvestWallet.IntegrationTests.Support;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,24 +15,9 @@ namespace InvestWallet.IntegrationTests;
 [Collection(ApiCollection.Name)]
 public class UnexpectedErrorTests
 {
-    private const string InternalSecret = "senha-interna-super-secreta-123";
-
     private readonly ApiFactory _factory;
 
     public UnexpectedErrorTests(ApiFactory factory) => _factory = factory;
-
-    /// <summary>Repositório que sempre falha como um banco quebrado falharia, com um "segredo" na mensagem.</summary>
-    private sealed class BrokenWalletRepository : IWalletRepository
-    {
-        private static Exception Boom() => new InvalidOperationException($"falha de conexão: Password={InternalSecret}");
-
-        public Task<(IReadOnlyList<Wallet> Items, int TotalCount)> ListAsync(int skip, int take, CancellationToken ct) => throw Boom();
-        public Task<Wallet?> GetByIdAsync(Guid id, CancellationToken ct) => throw Boom();
-        public Task<bool> HasTransactionsAsync(Guid walletId, CancellationToken ct) => throw Boom();
-        public Task AddAsync(Wallet wallet, CancellationToken ct) => throw Boom();
-        public Task SaveChangesAsync(CancellationToken ct) => throw Boom();
-        public Task RemoveAsync(Wallet wallet, CancellationToken ct) => throw Boom();
-    }
 
     private HttpClient ClientWithBrokenRepository() => _factory
         .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -52,7 +37,7 @@ public class UnexpectedErrorTests
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
-        Assert.DoesNotContain(InternalSecret, body);
+        Assert.DoesNotContain(BrokenWalletRepository.Secret, body);
         Assert.DoesNotContain("InvalidOperationException", body);
         Assert.DoesNotContain("   at ", body); // sem stack trace
         Assert.Contains("traceId", body);       // mas com o id para o suporte achar o erro no log
