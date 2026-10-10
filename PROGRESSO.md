@@ -3,24 +3,25 @@
 **Vaga:** Dev júnior full-stack, CN Innovation
 **Stack:** C# / .NET 8, ASP.NET Core, EF Core, PostgreSQL (Docker), xUnit, Swagger, GitHub Actions
 **Nível da usuária:** C# iniciante · TS médio · SQL médio · Git avançado · Docker médio
-**Última atualização:** 2026-10-10
+**Última atualização:** 2026-10-10 (revisão final)
 
-## Requisitos da vaga → onde serão atendidos
-| Requisito | Tipo | Etapa / local |
-|---|---|---|
-| Backend C#/.NET | Obrigatório | Todo o projeto |
-| POO, SOLID, camadas | Obrigatório | Etapa 1 e 3 (Domain/Application/Infrastructure/Api) |
-| HTTP/REST | Obrigatório | Etapa 3 em diante |
-| SQL e modelagem relacional | Obrigatório | Etapa 2 (migrations, FKs, índices) |
-| Git e fluxo de PR | Obrigatório | Branches + PRs por etapa |
-| Testes automatizados | Obrigatório | Etapa 7 (unitários + integração) |
-| Documentação técnica / ADRs leves | Desejável | docs/adr, Etapa 8 |
-| Tratamento de erros, logs | Responsabilidade | Etapa 5 |
-| Docker | Diferencial | Etapa 1-2 (Postgres) e 9 |
-| CI/CD GitHub Actions | Diferencial | Etapa 9 |
-| Integração com LLM (fallback, custo) | Diferencial | Etapa 10 (opcional) |
-| Frontend (React/Angular) + Playwright | Responsabilidade | Fase 2 (fora deste escopo) |
-| Fintech | Diferencial | Tema do projeto |
+## Requisitos da vaga → situação final
+A matriz completa, com evidências e lacunas, está em [`docs/REVISAO-FINAL.md`](docs/REVISAO-FINAL.md). Resumo:
+
+| Requisito | Situação |
+|---|---|
+| Backend C#/.NET, POO, SOLID, camadas, HTTP/REST | ✅ |
+| SQL e modelagem relacional | ✅ |
+| Testes automatizados (unitários e de integração) | ✅ 133 testes, 98,8% de cobertura de linhas |
+| Documentação técnica, ADRs leves | ✅ README, `docs/`, Swagger, 5 ADRs |
+| Docker | ✅ |
+| Logs, tratamento de erros, investigação de bugs | ✅ (sem métricas/tracing distribuído) |
+| Git | ✅ commits pequenos · 🟡 **fluxo de PR não exercitado** (tudo na `main`) |
+| CI/CD (GitHub Actions) | 🟡 escrito e validado localmente; **nunca rodou no GitHub**; sem CD |
+| Frontend (React/Angular) e testes E2E (Playwright) | ❌ fase 2 |
+| Integração com LLM | ❌ etapa 10 não feita |
+| Azure, mensageria, cache | ❌ |
+| Repositório publicado no GitHub | ❌ **próximo passo** |
 
 ## Etapas
 - [x] 0. Análise da vaga e planejamento (docs/)
@@ -33,11 +34,11 @@
 - [x] 7. Testes automatizados (unitários + integração)
 - [x] 8. Swagger/OpenAPI documentado
 - [x] 9. README, Dockerfile da API, GitHub Actions
-- [ ] 10. (Opcional) Importar nota de corretagem via LLM com fallback
-- [ ] 11. Revisão final e docs/ESTUDO.md
+- [ ] 10. (Opcional, **não feita**) Importar nota de corretagem via LLM com fallback
+- [x] 11. Revisão final e docs/ESTUDO.md
 
 ## Próxima etapa
-Etapa 10 (opcional): importar nota de corretagem via LLM com fallback e limite de custo. Ou, se preferir pular, etapa 11: revisão final e material de entrevista.
+Projeto concluído no escopo combinado. Próximos passos, em ordem de valor (detalhes em [`docs/REVISAO-FINAL.md`](docs/REVISAO-FINAL.md), seção 7): publicar no GitHub e ver o CI rodar; trabalhar por branches e Pull Requests; frontend em React com Playwright; autenticação JWT; integração com LLM.
 
 ## Decisões e suposições
 - PostgreSQL em Docker (a vaga não especifica banco) — suposição.
@@ -69,3 +70,4 @@ Etapa 10 (opcional): importar nota de corretagem via LLM com fallback e limite d
 - Etapa 9 concluída: Dockerfile multi-stage (335 MB, usuário não-root), compose com API + banco (healthchecks), migrations na subida atrás de flag (ADR 0004), CI em 2 jobs, README final, template de PR e 5 ADRs.
 - Verificado localmente: build Release com -warnaserror limpo, 118 testes passando, imagem sobe e fica healthy, migration aplicada em banco vazio, restart idempotente, comando do CI (`compose up --wait`) + smoke test executados.
 - **Não verificado:** o workflow nunca rodou no GitHub (só YAML válido + comandos executados localmente).
+- **Revisão final (2026-10-10):** clone limpo → build Release `-warnaserror` sem warnings, 118 testes (na época) passando e roteiro do README funcionando; depois, readiness com consulta ao banco, testes do 500, das migrations e da tradução de FK, chegando a **133 testes e 98,8% de cobertura**. Documentos corrigidos onde mentiam (PROGRESSO prometia PRs que não houve; docs/04 citava biblioteca não usada).

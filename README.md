@@ -24,7 +24,7 @@ Requer Docker.
 cp .env.example .env            # ajuste POSTGRES_PASSWORD se quiser
 docker compose up --build       # sobe PostgreSQL + API; cria as tabelas sozinho
 ```
-- API: <http://localhost:8080> · Swagger: <http://localhost:8080/swagger> · Health: <http://localhost:8080/health>
+- API: <http://localhost:8080> · Swagger: <http://localhost:8080/swagger> · Liveness: <http://localhost:8080/health> · Readiness (consulta o banco): <http://localhost:8080/health/ready>
 - Para parar: `docker compose down` (os dados ficam no volume; `down -v` apaga tudo).
 
 ### Opção B: API no seu computador, banco em Docker
@@ -60,6 +60,7 @@ curl -X POST $B/api/wallets/$W/transactions -H 'Content-Type: application/json' 
 | Ativos | `GET/POST /api/assets` · `GET/PUT/DELETE /api/assets/{id}` |
 | Transações | `GET/POST /api/wallets/{walletId}/transactions` · `GET/DELETE /api/wallets/{walletId}/transactions/{id}` |
 | Posição | `GET /api/wallets/{walletId}/positions` |
+| Saúde | `GET /health` (liveness, o processo está de pé) · `GET /health/ready` (readiness, inclui o banco; 503 se falhar) |
 
 Listagens são paginadas (`page`, `pageSize`, máximo 100); transações aceitam filtros `assetId`, `from` e `to`. Detalhes, exemplos e todas as respostas de erro estão no Swagger.
 
@@ -107,8 +108,8 @@ src/
   InvestWallet.Infrastructure/  AppDbContext, repositórios, migrations
   InvestWallet.Api/             controllers, tratamento de erros, Swagger, Serilog
 tests/
-  InvestWallet.UnitTests/         71 testes, sem banco
-  InvestWallet.IntegrationTests/  47 testes: API real + PostgreSQL descartável
+  InvestWallet.UnitTests/         74 testes, sem banco
+  InvestWallet.IntegrationTests/  59 testes: API real + PostgreSQL descartável
 docs/                           requisitos, modelo de dados, endpoints, ADRs, guia de estudo
 ```
 
@@ -128,7 +129,7 @@ dotnet test tests/InvestWallet.IntegrationTests  # sobem um PostgreSQL descartá
 - Os testes de integração **não** usam o banco do `docker compose`: cada execução cria e destrói o próprio container, com as migrations reais.
 - Cobrem fluxos completos, formato de erro, paginação, fusos horários e **corridas reais** (8 vendas simultâneas sobre saldo 20: exatamente 2 passam; 8 criações do mesmo ticker: 1 criada, 7 conflitos).
 - Há testes de **contrato** sobre o `swagger.json`: o documento é válido, expõe exatamente os endpoints planejados e documenta todas as respostas, então a documentação não envelhece em silêncio.
-- A eficácia dos testes foi verificada quebrando proteções de propósito (trava de concorrência, ordenação cronológica, tradução de erros, documentação) e confirmando que os testes certos falham.
+- Cobertura de linhas medida: **98,8%** (somando as duas suítes, sem as migrations geradas). Como cobertura só mostra o que foi *executado*, a eficácia dos testes foi verificada quebrando proteções de propósito (trava de concorrência, ordenação cronológica, tradução de erros, documentação, vazamento no 500) e confirmando que os testes certos falham.
 
 ## CI (GitHub Actions)
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda a cada push/PR para `main`:
@@ -148,11 +149,13 @@ dotnet test tests/InvestWallet.IntegrationTests  # sobem um PostgreSQL descartá
 | `Swagger__Enabled` | Expõe o Swagger fora de Development | `false` (o compose liga) |
 
 ## Limitações conhecidas e próximos passos
+- **Sem HTTPS, CORS e rate limiting** configurados (esperado atrás de um proxy/ingress; necessários para uso real e para um frontend).
 - **Sem autenticação/autorização** na v1: o foco foi o domínio e a qualidade do CRUD. Esconder o Swagger não é proteção; qualquer uso real exige autenticação (JWT/OIDC) e dados por usuário.
 - **Segredos no compose:** a senha do banco aparece na connection string do container (`docker inspect`). Adequado para desenvolvimento; em produção, use um gerenciador de segredos.
 - **Migrations na subida** servem a uma instância; com várias réplicas, usar um passo de deploy dedicado (ver ADR 0004).
 - **Posição calculada na hora:** correto e simples; se o histórico por carteira crescer muito, evoluir para *snapshots* (ver ADR 0002).
 - **Frontend e testes E2E (Playwright)** ficam para uma segunda fase; integração com LLM (extração de nota de corretagem, com fallback e limite de custo) é uma extensão natural.
 
-## Guia de estudo
-[`docs/ESTUDO.md`](docs/ESTUDO.md) reúne os conceitos aplicados, as decisões e perguntas de entrevista com respostas-guia.
+## Documentação do projeto
+- [`docs/REVISAO-FINAL.md`](docs/REVISAO-FINAL.md): cruza o projeto com cada item da vaga e diz com franqueza o que **não** foi feito.
+- [`docs/ESTUDO.md`](docs/ESTUDO.md): roteiro de apresentação, conceitos, decisões e perguntas de entrevista com respostas-guia.

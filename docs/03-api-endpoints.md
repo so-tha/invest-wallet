@@ -36,3 +36,9 @@ Erros 400 incluem `errors`: `{ "campo": ["mensagem", ...] }` (nomes em camelCase
 | 409 | Conflito com o estado atual | ticker duplicado, excluir ativo/carteira com transações |
 | 422 | Regra de negócio violada | vender mais do que possui, ativo do corpo inexistente |
 | 500 | Erro inesperado | mensagem genérica; detalhe só no log |
+
+## Saúde (fora do contrato de negócio, não aparecem no Swagger)
+| Método | Rota | Significado | Resposta |
+|---|---|---|---|
+| GET | /health | Liveness: o processo está de pé | 200 |
+| GET | /health/ready | Readiness: consegue atender (consulta o banco) | 200, ou 503 se o banco falhar |

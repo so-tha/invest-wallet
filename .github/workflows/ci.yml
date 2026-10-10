@@ -78,6 +78,7 @@ jobs:
       - name: Smoke test
         run: |
           curl --fail --silent http://localhost:8080/health
+          curl --fail --silent http://localhost:8080/health/ready   # inclui a consulta ao banco
           curl --fail --silent http://localhost:8080/swagger/v1/swagger.json > /dev/null
           curl --fail --silent -X POST http://localhost:8080/api/wallets \
             -H 'Content-Type: application/json' -d '{"name":"smoke"}'

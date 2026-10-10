@@ -1,7 +1,58 @@
 # Guia de estudo: InvestWallet
 
-Documento vivo: cresce a cada etapa. No final vira o material de preparação para entrevista.
-Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
+Material de preparação para a entrevista. Começa pelo que você precisa dizer em voz alta (seção 0) e depois aprofunda: perguntas com resposta-guia (1), conceitos (2), decisões (3) e erros que aconteceram (4).
+Legenda: 🟢 aplicado e verificado no projeto.
+
+---
+
+## 0. Comece por aqui
+
+### Roteiro de apresentação (2 minutos)
+Leia em voz alta, com as suas palavras, até soar natural. Todos os números abaixo foram medidos (ver [`REVISAO-FINAL.md`](REVISAO-FINAL.md)).
+
+> Eu construí o **InvestWallet**, uma API REST de carteira de investimentos em **C# e .NET 8** com **PostgreSQL**. Ela registra compras e vendas de ativos e calcula a posição e o preço médio de cada um.
+>
+> O ponto central é uma regra que parece simples e não é: **não deixar vender mais do que se possui**. Resolvi em três níveis: no domínio, uma função pura reprocessa o histórico em ordem cronológica; no banco, há restrições; e para requisições simultâneas uso uma **trava (advisory lock) do PostgreSQL** por carteira e ativo. Testei com requisições paralelas reais: sem a trava, seis vendas de dez sobre um saldo de vinte passaram todas e o saldo ficou negativo; com a trava, só duas passam.
+>
+> A arquitetura tem **quatro camadas**, com as dependências apontando para o núcleo, então as regras são testadas sem banco. Cuidei também do que acontece quando algo dá errado: erros no formato **ProblemDetails** com 400, 404, 409 e 422 bem distintos, e um **traceId** em cada resposta que leva direto aos **logs estruturados** em JSON.
+>
+> São **133 testes**, unitários e de integração contra um PostgreSQL real em Docker, com **98,8% de cobertura de linhas**. Para saber se os testes realmente protegem, eu **quebrei o código de propósito** e confirmei que eles falham.
+>
+> Roda com um `docker compose up`, tem Swagger completo e um pipeline de **CI no GitHub Actions** que escrevi e executei localmente, mas ainda preciso ver rodando no GitHub. O que falta é o **frontend em React com testes Playwright** e a **integração com LLM**; são os meus próximos passos.
+
+### O projeto em uma tabela
+| Área | O que usei | Por quê |
+|---|---|---|
+| Linguagem / framework | C# 12, .NET 8, ASP.NET Core (controllers) | Pedido na vaga; controllers são o mais comum no mercado |
+| Banco | PostgreSQL 16, EF Core 8, migrations | Relacional e transacional; leve em Docker |
+| Arquitetura | Domain / Application / Infrastructure / Api | Regras testáveis sem infraestrutura |
+| Validação | FluentValidation (400) + domínio (422) + banco | Defesa em camadas |
+| Erros | ProblemDetails (RFC 7807) + `traceId` | Formato único e rastreável |
+| Logs | Serilog (texto em dev, JSON em produção) | Estruturado, pesquisável |
+| Documentação | Swagger/OpenAPI + testes de contrato | Não envelhece em silêncio |
+| Testes | xUnit, NSubstitute, Testcontainers | Banco real, sem mocks de persistência |
+| Entrega | Docker multi-stage (não-root), Compose, GitHub Actions | Reprodutível |
+
+### Os 12 conceitos que mais valem a pena dominar
+Em ordem de probabilidade de cair, com a pergunta onde cada um está explicado:
+1. **Camadas e inversão de dependência**: P2, P5, P6.
+2. **Condição de corrida e como preveni-la** (lock, transação, índice único): P9, P16, P24.
+3. **Injeção de dependência e tempos de vida** (Scoped/Transient/Singleton): P8.
+4. **Códigos HTTP (400/404/409/422) e ProblemDetails**: P4, P17.
+5. **Validação em camadas** (borda, domínio, banco): P3, P15.
+6. **Testes: pirâmide, mock × fake, banco real × InMemory**: P21, P22, P25.
+7. **Testar a qualidade dos testes** (mutação; cobertura não basta): P23, P36.
+8. **Logs estruturados e `traceId`**: P18, P19, P20.
+9. **`decimal` × `double` para dinheiro**: P12, P29.
+10. **Docker** (camadas, multi-stage, não-root; `Host=db`): P30, P31, P34.
+11. **CI/CD e migrations em produção**: P32, P33.
+12. **Liveness × readiness**: P35.
+
+### E o que você NÃO fez? (responda sem se justificar demais)
+Diga primeiro o que fez e depois o que falta, **sem esconder**: *"o backend está completo e testado; o frontend e os testes E2E com Playwright são a próxima fase, e a integração com LLM também"*. Entrevistadores valorizam mais honestidade sobre os limites do que um projeto "perfeito" que desmorona na segunda pergunta. A lista completa está em [`REVISAO-FINAL.md`](REVISAO-FINAL.md).
+
+### Pergunta sobre o seu processo: "o que faria diferente?" (P37)
+Veja a resposta-guia na P37: ela usa os erros reais do projeto.
 
 ---
 
@@ -111,6 +162,15 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 
 ### P34. Dentro do Docker Compose, por que a API usa `Host=db` e não `localhost`? E o que faz o `depends_on` com `service_healthy`? 🟢 (etapa 9)
 **Resposta-guia:** Cada container tem a sua própria rede; `localhost` dentro do container da API é a própria API. O Compose cria uma rede em que os serviços se encontram pelo **nome do serviço** (`db`). Já o `depends_on: condition: service_healthy` espera o *healthcheck* do banco passar (`pg_isready`), e não apenas o container iniciar. Sem isso a API poderia subir antes de o banco aceitar conexões e falhar.
+
+### P35. Qual a diferença entre liveness e readiness? 🟢 (revisão final)
+**Resposta-guia:** *Liveness* (`/health`) pergunta "o processo está de pé?" e não consulta nada; se falhar, o orquestrador **reinicia** o container. *Readiness* (`/health/ready`) pergunta "consigo atender requisições agora?" e inclui as dependências (o banco); se falhar, o orquestrador **para de enviar tráfego**, mas não reinicia. Misturar os dois é perigoso: se a liveness consultasse o banco, uma queda do banco faria o orquestrador reiniciar todas as réplicas em loop, sem resolver nada. Verifiquei com o banco realmente parado: `/health` 200 e `/health/ready` 503. E há uma lição: na etapa 2 o meu `/health` não detectou um bug de configuração do banco justamente por ser só liveness; só separei na revisão final.
+
+### P36. Sua cobertura é de 98,8%. Isso prova que o código está correto? 🟢 (revisão final)
+**Resposta-guia:** Não. Cobertura mede quais linhas foram **executadas** pelos testes, não se algum teste **perceberia** um defeito ali. Um teste sem asserções dá 100% de cobertura. Por isso complementei com **testes de mutação manuais**: quebrei de propósito a trava de concorrência, a ordenação, a tradução de erros, a documentação e a proteção contra vazamento no 500, e confirmei que um teste falhava em cada caso. E o número só ajudou a achar lacunas reais: ao medir (92,4%), vi que o caminho do erro 500 e a migration na subida nunca tinham sido testados automaticamente. As linhas que sobraram sem cobertura são conhecidas e justificáveis (cancelamento pelo cliente, falha fatal de inicialização).
+
+### P37. Se você começasse o projeto de novo, o que faria diferente? 🟢 (revisão final)
+**Resposta-guia:** Cinco coisas, todas vindas de erros reais: (1) **trabalhar por branches e Pull Requests desde o início**: commitei direto na `main`, então o fluxo de code review ficou só preparado (template e CI), não exercitado; (2) **publicar no GitHub e ter o CI rodando desde a primeira etapa**: o meu workflow só foi validado localmente; (3) ligar o `-warnaserror` desde o começo (ele só apareceu na etapa 9 e pegou um construtor obsoleto); (4) **fixar versões de pacotes** desde o início (deixei `8.*` flutuante três vezes); (5) ter a *readiness* com consulta ao banco desde o primeiro dia. Mostrar que você aprende com os próprios erros pesa mais do que afirmar que acertou tudo.
 
 *(Novas perguntas serão adicionadas a cada etapa.)*
 
@@ -251,6 +311,13 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - **Idempotência:** executar de novo produz o mesmo estado (a migration na subida não reaplica o que já foi aplicado).
 - **ADR (registro de decisão):** cinco ADRs curtos documentam as decisões que um revisor mais questionaria.
 
+### Revisão final
+- **Liveness × readiness:** `MapHealthChecks("/health", Predicate = _ => false)` (sem checks) e `"/health/ready"` filtrando por tag. `AddDbContextCheck<AppDbContext>` faz uma consulta mínima ao banco; um check que falha devolve 503.
+- **Cobertura de linhas:** mede linhas executadas. O `coverlet` gera XML Cobertura; somei as duas suítes (uma linha conta como coberta se *qualquer* teste a executou) e excluí as migrations, que são código gerado.
+- **Matriz de rastreabilidade:** tabela requisito → evidência, com a situação de cada item. Serve para a revisão e para você saber exatamente o que pode afirmar na entrevista.
+- **Verificação em ambiente limpo (*clean room*):** clonar o repositório do zero e seguir só o README, para provar que nada depende de arquivos locais não versionados.
+- **Revisar números contra os fatos:** conferi cada afirmação do documento (contagem de testes, de mutações, de commits) contra a medição; duas estavam erradas.
+
 *(Novos conceitos serão adicionados a cada etapa.)*
 
 ---
@@ -264,6 +331,13 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 | `decimal`/`numeric(18,6)` | Precisão financeira | `float` |
 | Regras no C# **e** no banco | Defesa em profundidade | Só no C# |
 | Sem autenticação na v1 | Foco no CRUD | JWT (melhoria futura) |
+| Trava (advisory lock) por carteira e ativo | Serializa só o que conflita | `SERIALIZABLE` com retry; versão otimista |
+| 400 × 409 × 422 distintos | O cliente sabe o que corrigir | Um 400 genérico para tudo |
+| Migrations na subida, atrás de flag | `docker compose up` funciona de ponta a ponta | Bundle/passo de deploy (melhor em produção) |
+| Swagger desligado fora de Development | Reduz exposição | Sempre ligado |
+| Health separado em liveness e readiness | Não reiniciar por falha de dependência | Um único `/health` |
+| Banco real nos testes (Testcontainers) | InMemory não aplica índices, FKs nem locks | EF InMemory/SQLite |
+| `xUnit` com `Assert` puro | Sem dependência extra | FluentAssertions |
 
 ---
 
@@ -280,6 +354,8 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - Rodei localmente `dotnet build -c Release -warnaserror` (o que o CI vai rodar) e ele revelou um warning que o build normal escondia: o construtor sem parâmetros do `PostgreSqlBuilder` estava obsoleto. Sem esse ensaio, o primeiro CI no GitHub falharia. Lição: execute localmente exatamente o que o pipeline executa.
 - Para testar a migration num banco vazio sem tocar nos dados de desenvolvimento, criei um banco temporário (`iw_smoke`) no mesmo servidor, apontei o container para ele e o apaguei no final.
 - A senha do banco fica visível na connection string do container (`docker inspect`). É aceitável em desenvolvimento e está no README como limitação; em produção, segredos vêm de um gerenciador.
+- **Documentos que mentiam:** o `PROGRESSO.md` prometia "branches + PRs por etapa", mas tudo foi para a `main`; o `docs/04` citava uma biblioteca de testes (FluentAssertions) que eu nunca usei; o README tinha contagens antigas de testes. Só achei ao fazer a revisão final, cruzando cada afirmação com o repositório. Lição: documentação é código; precisa ser revisada.
+- **Minhas próprias contagens estavam erradas** na primeira versão da revisão ("7 de 7 mutações", cobertura medida *antes* dos últimos testes). Corrigi ao conferir contra a medição. Lição: um número que você não mediu agora é uma suposição.
 - Repeti o erro do `pkill -f`: usei `pgrep -f "InvestWallet.Api.dll"` num laço com `kill`, e ele também casou com o shell que rodava o comando (a linha de comando continha o texto), que foi encerrado (código 144). Lição: para achar um processo, use a porta (`ss -ltnp 'sport = :5265'`) ou guarde o PID ao iniciar. Além disso, `wait %2 %3...` esperou jobs errados; o correto é guardar os PIDs em um array e fazer `wait $PIDS`.
 - Adicionei pacotes com `--version '8.0.*'` e o `.csproj` ficou com versão flutuante; só percebi na etapa 5 e fixei todas as versões.
 - `pkill -f nome` matou o próprio shell, porque a linha de comando continha o mesmo texto. Lição: guarde o PID (`$!`) e use `kill`.

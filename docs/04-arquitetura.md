@@ -22,4 +22,4 @@ Dependências apontam para dentro: Api → Application → Domain; Infrastructur
 - **Sem CQRS/MediatR/DDD completo**: seria excesso para o escopo júnior; fica como evolução citada em entrevista.
 
 ## Stack
-.NET 8, ASP.NET Core Web API (controllers), EF Core + Npgsql, FluentValidation, Serilog, Swashbuckle, xUnit + FluentAssertions + NSubstitute, Testcontainers (integração), Docker Compose, GitHub Actions.
+.NET 8, ASP.NET Core Web API (controllers), EF Core + Npgsql, FluentValidation, Serilog, Swashbuckle, xUnit (com `Assert` puro) + NSubstitute, Testcontainers (integração, PostgreSQL real), Docker Compose, GitHub Actions.

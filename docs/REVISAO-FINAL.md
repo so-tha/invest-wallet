@@ -17,7 +17,7 @@ Legenda: ✅ atendido e verificado · 🟡 parcial ou preparado, mas não exerci
 | Registro de decisões (ADRs leves) | ✅ | 5 ADRs em [`adr/`](adr). |
 | Código limpo e princípios SOLID | ✅ | S: controllers só traduzem HTTP, regras ficam em serviços/domínio. D: serviços dependem de interfaces de repositório. L/I/O: ver nota abaixo. |
 | Code review e fluxo de pull request | 🟡 | Template de PR e CI **preparados**; mas todo o histórico foi commitado direto na `main`, **nenhum PR real foi aberto**. |
-| Versionamento com Git | ✅ | ~16 commits pequenos e descritivos, sem segredos versionados. |
+| Versionamento com Git | ✅ | 16 commits pequenos e descritivos (com este), sem segredos versionados. |
 | Documentação técnica | ✅ | README, `docs/`, Swagger, ADRs, guia de estudo. |
 | Testes unitários | ✅ | 74 testes (domínio, validadores, serviços com mock e fake). |
 | Testes de integração | ✅ | 59 testes: API real + PostgreSQL descartável (Testcontainers), incluindo corridas reais de concorrência. |
@@ -41,7 +41,7 @@ Legenda: ✅ atendido e verificado · 🟡 parcial ou preparado, mas não exerci
 | Uma linguagem backend + um framework frontend | 🟡 | C#/.NET ✅; frontend ❌. |
 | SQL e modelagem relacional básica | ✅ | Esquema normalizado, chaves, índices, restrições, transações, advisory lock. |
 | Git e PR/code review | 🟡 | Git ✅; PR não exercitado (ver acima). |
-| Testes automatizados básicos | ✅ | 133 testes, cobertura de linhas ~98% (medida, sem migrations). |
+| Testes automatizados básicos | ✅ | 133 testes, cobertura de linhas 98,8% (medida, sem migrations). |
 | Leitura de documentação técnica em inglês | n/a | Não verificável em repositório. |
 
 ## 3. Diferenciais
@@ -64,11 +64,11 @@ Legenda: ✅ atendido e verificado · 🟡 parcial ou preparado, mas não exerci
 | Verificação | Resultado |
 |---|---|
 | Clone limpo → `dotnet build -c Release -warnaserror` | 0 warnings, 0 erros |
-| Clone limpo → testes | todos passam (a suíte cresceu depois; ver abaixo) |
+| Clone limpo → testes | 71 unitários + 47 de integração, todos passando (a suíte cresceu depois desta verificação; ver a linha da suíte final) |
 | Clone limpo → roteiro do README (`docker compose up --build`) | API e banco `healthy`; exemplo do README devolve 201, posição correta (10 a 35,5) e 422 |
 | Suíte final em Release com `-warnaserror` | 74 unitários + 59 de integração, todos passando |
-| Cobertura de linhas (unitários + integração somados, sem migrations) | **97,9%** (Api 97,1 · Application 100 · Domain 94,7 · Infrastructure 98,1) |
-| Mutações manuais (quebrar de propósito e ver o teste falhar) | 7 de 7 detectadas: trava de concorrência, ordenação cronológica, tradução de erro de unicidade, documentação (2 casos), vazamento de mensagem no 500 |
+| Cobertura de linhas (unitários + integração somados, sem migrations) | **98,8%** de 756 linhas (Api 97,5 · Application 100 · Domain 98,2 · Infrastructure 99,4) |
+| Mutações manuais (quebrar de propósito e ver o teste falhar) | 5 execuções, todas detectadas: trava de concorrência, ordenação cronológica, tradução de erro de unicidade, documentação (2 alterações de uma vez: um 409 e um resumo removidos) e vazamento de mensagem no 500 |
 | Segredos versionados | nenhum (`.env` ignorado; `.env.example` sem segredos reais) |
 
 **Sobre a cobertura:** o número mostra o que foi *executado*, não o que seria *percebido* se estivesse errado. Por isso as mutações importam mais. As linhas sem cobertura são: cancelamento pelo cliente no tratador de erros, a falha `Fatal` de inicialização e o ramo `throw;` de erros de banco desconhecidos.
