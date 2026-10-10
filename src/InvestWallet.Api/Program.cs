@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using InvestWallet.Api.Middleware;
+using InvestWallet.Api.Swagger;
 using InvestWallet.Application;
 using InvestWallet.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
@@ -69,8 +70,7 @@ try
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddProblemDetails();
 
-    builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen();
+    builder.Services.AddSwaggerDocumentation();
     builder.Services.AddHealthChecks();
 
     var app = builder.Build();
@@ -100,7 +100,9 @@ try
     // 3) Captura exceções de tudo que vem depois
     app.UseExceptionHandler();
 
-    if (app.Environment.IsDevelopment())
+    // Swagger sempre em Development; nos demais ambientes só se "Swagger:Enabled=true"
+    // (ex.: o container do projeto, para quem for avaliá-lo). Expor a documentação é decisão consciente.
+    if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
     {
         app.UseSwagger();
         app.UseSwaggerUI();

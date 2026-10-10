@@ -3,6 +3,12 @@ using InvestWallet.Domain.Enums;
 
 namespace InvestWallet.Application.Transactions;
 
+/// <summary>Dados de uma compra ou venda.</summary>
+/// <param name="AssetId">Id do ativo negociado (deve existir).</param>
+/// <param name="Type">Buy (compra) ou Sell (venda).</param>
+/// <param name="Quantity">Quantidade negociada. Maior que zero; até 12 dígitos inteiros e 6 casas decimais.</param>
+/// <param name="UnitPrice">Preço por unidade. Maior que zero; até 12 dígitos inteiros e 6 casas decimais.</param>
+/// <param name="ExecutedAt">Instante da negociação (ISO 8601, com ou sem fuso; convertido para UTC). Não pode estar no futuro.</param>
 public record TransactionRequest(
     Guid AssetId,
     TransactionType Type,
@@ -10,6 +16,17 @@ public record TransactionRequest(
     decimal UnitPrice,
     DateTimeOffset ExecutedAt);
 
+/// <summary>Compra ou venda registrada.</summary>
+/// <param name="Id">Identificador único.</param>
+/// <param name="WalletId">Carteira à qual a transação pertence.</param>
+/// <param name="AssetId">Ativo negociado.</param>
+/// <param name="AssetTicker">Ticker do ativo, para conveniência.</param>
+/// <param name="Type">Buy (compra) ou Sell (venda).</param>
+/// <param name="Quantity">Quantidade negociada.</param>
+/// <param name="UnitPrice">Preço por unidade.</param>
+/// <param name="TotalValue">Quantidade × preço unitário.</param>
+/// <param name="ExecutedAt">Instante da negociação, em UTC.</param>
+/// <param name="CreatedAt">Instante em que a transação foi registrada, em UTC.</param>
 public record TransactionResponse(
     Guid Id,
     Guid WalletId,
