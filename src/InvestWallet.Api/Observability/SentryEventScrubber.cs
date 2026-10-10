@@ -13,8 +13,10 @@ public partial class SentryEventScrubber : ISentryEventProcessor
 {
     public const string Redacted = "[REDACTED]";
 
-    // password=xxx, pwd: xxx, api_key=xxx, token=xxx, secret=xxx (o valor vai até ';', espaço ou aspas)
-    [GeneratedRegex("""(?i)(password|pwd|passwd|secret|token|api[_-]?key|authorization)(\s*[=:]\s*)[^;\s"']+""")]
+    // Chave sensível + separador (=, : ou aspas do JSON) + valor. O valor pode vir precedido do esquema
+    // ("Bearer", "Basic"), e o segredo é o que vem DEPOIS dele. Vai até ';', espaço ou aspas.
+    // Exemplos: Password=abc; pwd: xyz; api_key=K; Authorization: Bearer abc; "password":"abc"
+    [GeneratedRegex("""(?i)(password|pwd|passwd|secret|token|api[_-]?key|authorization)(["']?\s*[=:]\s*["']?)(?:(?:bearer|basic)\s+)?[^;\s"']+""")]
     private static partial Regex SecretPattern();
 
     public static string Scrub(string text) => SecretPattern().Replace(text, $"$1$2{Redacted}");

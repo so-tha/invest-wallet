@@ -27,6 +27,7 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       Database__MigrateOnStartup: "true"   # cria/atualiza as tabelas ao subir (docs/adr/0004)
       Swagger__Enabled: "true"             # expõe /swagger para quem for avaliar o projeto
+      Sentry__Dsn: "${SENTRY_DSN:-}"        # opcional: vazio = Sentry desativado (nada sai da aplicação)
     ports:
       - "${API_PORT:-8080}:8080"
     healthcheck:
