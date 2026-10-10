@@ -75,6 +75,11 @@ try
 
     var app = builder.Build();
 
+    // Em containers não há um "dotnet ef" à mão: com a flag ligada, a própria API cria/atualiza o esquema ao subir.
+    // Desligada por padrão: em produção real, quem altera o banco deve ser uma decisão de deploy (docs/adr/0004).
+    if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+        await app.Services.MigrateDatabaseAsync();
+
     // A ORDEM dos middlewares importa: a requisição passa por eles de cima para baixo e a resposta volta de baixo para cima.
 
     // 1) Põe o TraceId em TODA linha de log escrita durante esta requisição

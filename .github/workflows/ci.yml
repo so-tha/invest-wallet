@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Uma nova execução na mesma branch cancela a anterior (economiza minutos e evita resultados fora de ordem)
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Princípio do menor privilégio: o workflow só precisa ler o código
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    name: Build e testes
+    runs-on: ubuntu-latest   # já traz Docker, necessário para os testes de integração (Testcontainers)
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # Cache dos pacotes NuGet: a chave muda só quando algum .csproj muda
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore
+
+      # Qualquer warning quebra o build: mantém o código limpo sem depender de revisão manual
+      - name: Build
+        run: dotnet build --no-restore -c Release -warnaserror
+
+      - name: Testes unitários
+        run: dotnet test tests/InvestWallet.UnitTests --no-build -c Release --logger "trx;LogFileName=unit.trx" --results-directory TestResults
+
+      - name: Testes de integração (PostgreSQL via Testcontainers)
+        run: dotnet test tests/InvestWallet.IntegrationTests --no-build -c Release --logger "trx;LogFileName=integration.trx" --results-directory TestResults
+
+      # Guarda os resultados mesmo quando algum teste falha, para investigação
+      - name: Publicar resultados dos testes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/*.trx
+          retention-days: 7
+
+  docker:
+    name: Imagem Docker e smoke test
+    runs-on: ubuntu-latest
+    needs: build-and-test      # só gasta tempo construindo a imagem se o código está correto
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar .env
+        run: cp .env.example .env
+
+      - name: Subir API e banco
+        run: docker compose up -d --build --wait --wait-timeout 120
+
+      # Smoke test: prova que o que foi empacotado sobe, migra o banco e responde de verdade
+      - name: Smoke test
+        run: |
+          curl --fail --silent http://localhost:8080/health
+          curl --fail --silent http://localhost:8080/swagger/v1/swagger.json > /dev/null
+          curl --fail --silent -X POST http://localhost:8080/api/wallets \
+            -H 'Content-Type: application/json' -d '{"name":"smoke"}'
+
+      - name: Logs da API (se algo falhou)
+        if: failure()
+        run: docker compose logs api db
+
+      - name: Encerrar
+        if: always()
+        run: docker compose down -v

@@ -97,6 +97,21 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 ### P29. Por que a quantidade e o preço são `decimal` no JSON e o que acontece com `double`? 🟢 (etapa 8)
 **Resposta-guia:** No JSON o número é só texto (`35.5`); a precisão se decide ao ler. Em C# o campo é `decimal`, então o valor é lido sem passar por ponto flutuante binário. No contrato OpenAPI isso aparece como `number` com formato `double`, mas a API valida no servidor o limite de 12 dígitos inteiros e 6 casas decimais e o documenta na descrição do campo. Em integrações financeiras convém combinar também o arredondamento (aqui: `AwayFromZero`, 6 casas, só na apresentação).
 
+### P30. Por que o Dockerfile copia os `.csproj` e roda `restore` antes de copiar o resto do código? 🟢 (etapa 9)
+**Resposta-guia:** Cada instrução do Dockerfile gera uma *camada* em cache, reaproveitada enquanto o que ela depende não muda. Copiando só os `.csproj` e restaurando antes, a camada do `restore` (lenta: baixa pacotes) só é refeita quando as dependências mudam, não a cada alteração de código. Medi: o primeiro build levou ~70 s só no restore; os seguintes reaproveitaram o cache.
+
+### P31. Para que serve o build multi-stage? E rodar como não-root? 🟢 (etapa 9)
+**Resposta-guia:** O primeiro estágio usa a imagem do SDK (compilador, ferramentas; grande) para compilar e publicar; o segundo usa só a imagem de runtime e recebe apenas o resultado publicado. A imagem final tem 335 MB e não carrega código-fonte nem SDK (menos superfície de ataque e menos para baixar). Rodar como usuário sem privilégios (`uid=1654 app`) limita o estrago se a aplicação for comprometida: o invasor não é root no container. Verifiquei com `docker exec ... id`.
+
+### P32. O que faz o seu pipeline de CI e por que nessa ordem? 🟢 (etapa 9)
+**Resposta-guia:** A cada push/PR: (1) restaura e compila em Release com `-warnaserror`, então qualquer warning quebra o build; (2) roda os testes unitários e os de integração (que usam Docker/Testcontainers, disponível no runner); (3) só então, no segundo job (`needs`), constrói a imagem, sobe API + banco com `docker compose` e faz um *smoke test* (health, Swagger, um POST real). Falhar cedo e barato antes de gastar tempo na imagem. **CI** = integrar e validar automaticamente a cada mudança; **CD** = entregar/implantar automaticamente (não implementei: falta um ambiente de destino). Honestidade: o workflow foi validado como YAML e seus comandos foram executados localmente, mas ainda não rodou no GitHub.
+
+### P33. Como você aplica migrations em produção? 🟢 (etapa 9)
+**Resposta-guia:** Há três estratégias: (1) a aplicação migra ao subir (simples; arriscado com várias réplicas, pois o EF 8 não serializa a execução); (2) um passo de deploy dedicado, com *bundle* de migrations (`dotnet ef migrations bundle`) ou script SQL idempotente revisado (o mais correto em produção); (3) manualmente. No projeto usei (1), **atrás de uma flag desligada por padrão**, para o `docker compose up` funcionar de ponta a ponta, e registrei a troca no ADR 0004. Testei: num banco vazio ele aplicou a migration; ao reiniciar, disse "nenhuma migration pendente" (idempotente).
+
+### P34. Dentro do Docker Compose, por que a API usa `Host=db` e não `localhost`? E o que faz o `depends_on` com `service_healthy`? 🟢 (etapa 9)
+**Resposta-guia:** Cada container tem a sua própria rede; `localhost` dentro do container da API é a própria API. O Compose cria uma rede em que os serviços se encontram pelo **nome do serviço** (`db`). Já o `depends_on: condition: service_healthy` espera o *healthcheck* do banco passar (`pg_isready`), e não apenas o container iniciar. Sem isso a API poderia subir antes de o banco aceitar conexões e falhar.
+
 *(Novas perguntas serão adicionadas a cada etapa.)*
 
 ---
@@ -221,6 +236,21 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - **Teste de contrato:** testa o documento (`swagger.json`) em vez do comportamento; `Microsoft.OpenApi.Readers` valida o documento contra a especificação.
 - **`WithWebHostBuilder`:** deriva da fábrica de testes uma variante com outro ambiente/configuração, reutilizando o banco já iniciado.
 
+### Etapa 9: Docker, CI e entrega
+- **Camadas e cache do Docker:** cada instrução é uma camada em cache; ordene da menos para a mais mutável (dependências antes do código).
+- **Multi-stage build:** vários `FROM` num Dockerfile; o último estágio vira a imagem, e os anteriores só fornecem arquivos (`COPY --from=build`).
+- **`.dockerignore`:** o que não é enviado ao daemon: deixa o build rápido e evita vazar `.env` e `.git` para dentro da imagem.
+- **`USER $APP_UID`:** executa como usuário sem privilégios (as imagens .NET 8 já trazem o usuário `app`). Porta 8080 por ser maior que 1024.
+- **Healthcheck:** comando que o Docker executa para saber se o serviço está saudável. A imagem do ASP.NET não tem `curl`, então usei o `/dev/tcp` do bash para fazer a requisição HTTP.
+- **Compose:** `build`, `depends_on` com `condition`, `environment` (a notação `A__B` equivale a `A:B` na configuração do .NET), `ports`, volumes nomeados, `up --wait` (espera ficar saudável).
+- **Interpolação `${VAR}` no compose:** lê do `.env`; `${VAR:-padrão}` define valor padrão.
+- **GitHub Actions:** `on` (gatilhos), `jobs`/`steps`, `needs` (ordem entre jobs), `permissions` (menor privilégio), `concurrency` (cancela execuções redundantes), cache de pacotes, `upload-artifact`, `if: always()/failure()`.
+- **`-warnaserror`:** transforma warnings em erros; mantém a base limpa sem depender de revisão.
+- **Smoke test:** teste mínimo, após empacotar, que prova que o artefato sobe e responde.
+- **Template de PR:** checklist padronizado que apoia o fluxo de code review.
+- **Idempotência:** executar de novo produz o mesmo estado (a migration na subida não reaplica o que já foi aplicado).
+- **ADR (registro de decisão):** cinco ADRs curtos documentam as decisões que um revisor mais questionaria.
+
 *(Novos conceitos serão adicionados a cada etapa.)*
 
 ---
@@ -247,6 +277,9 @@ Legenda: 🟢 já aplicado no projeto · 🟡 vem nas próximas etapas.
 - Escrevi um teste de arredondamento com uma expressão sem sentido (`10m / 3m == 0 ? 1 : 3.333333333m`) e 9 casas decimais, que a própria entidade recusou. O teste estava errado, não o código; reescrevi com dados que realmente geram dízima (custo 4 para 3 unidades).
 - Ia validar a documentação com uma mutação (`git checkout` para restaurar), mas o código dos controllers ainda **não estava commitado**: o `checkout` teria apagado o trabalho. Percebi antes de rodar e commitei primeiro. Lição: antes de usar `git checkout --` como "desfazer", confirme que o que você quer manter já está salvo.
 - O `[Produces("application/json")]` no controller sobrescrevia o `application/problem+json` que eu havia declarado nos erros; só vi ao inspecionar o `swagger.json` gerado. Lição: confira o artefato gerado, não só o código que o configura.
+- Rodei localmente `dotnet build -c Release -warnaserror` (o que o CI vai rodar) e ele revelou um warning que o build normal escondia: o construtor sem parâmetros do `PostgreSqlBuilder` estava obsoleto. Sem esse ensaio, o primeiro CI no GitHub falharia. Lição: execute localmente exatamente o que o pipeline executa.
+- Para testar a migration num banco vazio sem tocar nos dados de desenvolvimento, criei um banco temporário (`iw_smoke`) no mesmo servidor, apontei o container para ele e o apaguei no final.
+- A senha do banco fica visível na connection string do container (`docker inspect`). É aceitável em desenvolvimento e está no README como limitação; em produção, segredos vêm de um gerenciador.
 - Repeti o erro do `pkill -f`: usei `pgrep -f "InvestWallet.Api.dll"` num laço com `kill`, e ele também casou com o shell que rodava o comando (a linha de comando continha o texto), que foi encerrado (código 144). Lição: para achar um processo, use a porta (`ss -ltnp 'sport = :5265'`) ou guarde o PID ao iniciar. Além disso, `wait %2 %3...` esperou jobs errados; o correto é guardar os PIDs em um array e fazer `wait $PIDS`.
 - Adicionei pacotes com `--version '8.0.*'` e o `.csproj` ficou com versão flutuante; só percebi na etapa 5 e fixei todas as versões.
 - `pkill -f nome` matou o próprio shell, porque a linha de comando continha o mesmo texto. Lição: guarde o PID (`$!`) e use `kill`.

@@ -1,0 +1,18 @@
+# Não enviar ao daemon do Docker nada que não participe da imagem: build mais rápido e sem vazar segredos
+**/bin/
+**/obj/
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+.config/
+tests/
+docs/
+.env
+.env.*
+!.env.example
+*.md
+docker-compose*.yml
+Dockerfile
+.dockerignore

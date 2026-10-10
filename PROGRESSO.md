@@ -32,12 +32,12 @@
 - [x] 6. Logs estruturados
 - [x] 7. Testes automatizados (unitários + integração)
 - [x] 8. Swagger/OpenAPI documentado
-- [ ] 9. README, Dockerfile da API, GitHub Actions
+- [x] 9. README, Dockerfile da API, GitHub Actions
 - [ ] 10. (Opcional) Importar nota de corretagem via LLM com fallback
 - [ ] 11. Revisão final e docs/ESTUDO.md
 
 ## Próxima etapa
-Etapa 9: README final, Dockerfile da API, docker-compose completo e GitHub Actions (build + testes).
+Etapa 10 (opcional): importar nota de corretagem via LLM com fallback e limite de custo. Ou, se preferir pular, etapa 11: revisão final e material de entrevista.
 
 ## Decisões e suposições
 - PostgreSQL em Docker (a vaga não especifica banco) — suposição.
@@ -66,3 +66,6 @@ Etapa 9: README final, Dockerfile da API, docker-compose completo e GitHub Actio
 - Etapa 8 concluída: 15/15 operações com resumo, 40 respostas de erro documentadas, exemplos nos 3 corpos de requisição, enums como texto, `application/problem+json` nos erros, `Swagger:Enabled` para expor fora de Development. 9 testes de contrato (suíte total: 71 unitários + 47 de integração).
 - Decisão: Swagger desligado em produção por padrão (ver P28); o container do projeto o ligará via `Swagger__Enabled=true`.
 - Para a etapa 9: a API em container roda em `Production` → definir `ConnectionStrings__Default`, `Swagger__Enabled=true`, aplicar migrations na subida (decidir como) e esperar o healthcheck do banco.
+- Etapa 9 concluída: Dockerfile multi-stage (335 MB, usuário não-root), compose com API + banco (healthchecks), migrations na subida atrás de flag (ADR 0004), CI em 2 jobs, README final, template de PR e 5 ADRs.
+- Verificado localmente: build Release com -warnaserror limpo, 118 testes passando, imagem sobe e fica healthy, migration aplicada em banco vazio, restart idempotente, comando do CI (`compose up --wait`) + smoke test executados.
+- **Não verificado:** o workflow nunca rodou no GitHub (só YAML válido + comandos executados localmente).

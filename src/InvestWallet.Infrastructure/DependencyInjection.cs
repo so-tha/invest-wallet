@@ -6,6 +6,7 @@ using InvestWallet.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace InvestWallet.Infrastructure;
 
@@ -27,5 +28,27 @@ public static class DependencyInjection
         services.AddScoped<ITransactionRepository, TransactionRepository>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Aplica as migrations pendentes. Chamado na subida da aplicação quando <c>Database:MigrateOnStartup=true</c>
+    /// (veja docs/adr/0004). Seguro para uma única instância; com várias réplicas, prefira um passo de deploy separado.
+    /// </summary>
+    public static async Task MigrateDatabaseAsync(this IServiceProvider services, CancellationToken ct = default)
+    {
+        using var scope = services.CreateScope();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Migrations");
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var pending = (await db.Database.GetPendingMigrationsAsync(ct)).ToList();
+        if (pending.Count == 0)
+        {
+            logger.LogInformation("Banco já está atualizado, nenhuma migration pendente");
+            return;
+        }
+
+        logger.LogInformation("Aplicando {Count} migration(s): {Migrations}", pending.Count, pending);
+        await db.Database.MigrateAsync(ct);
+        logger.LogInformation("Migrations aplicadas com sucesso");
     }
 }
