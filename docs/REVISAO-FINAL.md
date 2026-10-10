@@ -20,10 +20,10 @@ Legenda: ✅ atendido e verificado · 🟡 parcial ou preparado, mas não exerci
 | Versionamento com Git | ✅ | 16 commits pequenos e descritivos (com este), sem segredos versionados. |
 | Documentação técnica | ✅ | README, `docs/`, Swagger, ADRs, guia de estudo. |
 | Testes unitários | ✅ | 74 testes (domínio, validadores, serviços com mock e fake). |
-| Testes de integração | ✅ | 59 testes: API real + PostgreSQL descartável (Testcontainers), incluindo corridas reais de concorrência. |
+| Testes de integração | ✅ | 80 testes: API real + PostgreSQL descartável (Testcontainers), incluindo corridas reais de concorrência. |
 | Testes E2E (Playwright) | ❌ | Exige interface; fase 2. |
 | Esteira de CI/CD | 🟡 | CI escrito (build `-warnaserror`, testes, imagem, smoke test); **nunca rodou no GitHub** (sem repositório remoto ainda). CD (implantação) não implementado. |
-| Logs, monitoramento, tratamento de erros | 🟡 | ✅ logs estruturados (Serilog/JSON), `traceId` ponta a ponta, tratador global de erros, health `live`/`ready`. ❌ Sem métricas nem tracing distribuído (OpenTelemetry/Prometheus). |
+| Logs, monitoramento, tratamento de erros | 🟡 | ✅ logs estruturados (Serilog/JSON), `traceId` ponta a ponta, tratador global de erros, health `live`/`ready`, **aviso de erros 500 via Sentry (opcional)**. ❌ Sem métricas nem tracing distribuído (OpenTelemetry/Prometheus). A **entrega real ao Sentry não foi verificada** (sem DSN); só o comportamento, com transporte simulado. |
 | Investigação de bugs em dev e produção | ✅ | Demonstrado: banco derrubado → 500 com `traceId` → 4 linhas no log com o mesmo id. |
 | Integrar IA (LLM, extração de documentos; fallback, custo, latência) | ❌ | Etapa 10 deliberadamente não feita. |
 | Pairing, refinamento com PM, demos | n/a | Não é verificável em código. O roteiro de apresentação está no [`ESTUDO.md`](ESTUDO.md). |
@@ -41,7 +41,7 @@ Legenda: ✅ atendido e verificado · 🟡 parcial ou preparado, mas não exerci
 | Uma linguagem backend + um framework frontend | 🟡 | C#/.NET ✅; frontend ❌. |
 | SQL e modelagem relacional básica | ✅ | Esquema normalizado, chaves, índices, restrições, transações, advisory lock. |
 | Git e PR/code review | 🟡 | Git ✅; PR não exercitado (ver acima). |
-| Testes automatizados básicos | ✅ | 133 testes, cobertura de linhas 98,8% (medida, sem migrations). |
+| Testes automatizados básicos | ✅ | 154 testes, cobertura de linhas 98,9% (medida, sem código gerado). |
 | Leitura de documentação técnica em inglês | n/a | Não verificável em repositório. |
 
 ## 3. Diferenciais
@@ -55,7 +55,7 @@ Legenda: ✅ atendido e verificado · 🟡 parcial ou preparado, mas não exerci
 | APIs de LLM e prompts | ❌ | Etapa 10 não feita. |
 | Mensageria / filas | ❌ | Não aplicável a este escopo; não implementado. |
 | Cache | ❌ | Discutido (P14 do estudo: snapshots/cache), não implementado por ser desnecessário no volume atual. |
-| Observabilidade | 🟡 | Logs + `traceId` + health; sem métricas e tracing. |
+| Observabilidade | 🟡 | Logs + `traceId` + health + rastreamento de erros (Sentry, opcional); sem métricas e tracing. |
 | Interesse em fintech | ✅ | O domínio do projeto: carteira, ativos, preço médio, precisão decimal. |
 | Projeto no GitHub / portfólio publicado | ❌ | **Próximo passo imediato**: publicar o repositório. |
 
@@ -66,9 +66,9 @@ Legenda: ✅ atendido e verificado · 🟡 parcial ou preparado, mas não exerci
 | Clone limpo → `dotnet build -c Release -warnaserror` | 0 warnings, 0 erros |
 | Clone limpo → testes | 71 unitários + 47 de integração, todos passando (a suíte cresceu depois desta verificação; ver a linha da suíte final) |
 | Clone limpo → roteiro do README (`docker compose up --build`) | API e banco `healthy`; exemplo do README devolve 201, posição correta (10 a 35,5) e 422 |
-| Suíte final em Release com `-warnaserror` | 74 unitários + 59 de integração, todos passando |
-| Cobertura de linhas (unitários + integração somados, sem migrations) | **98,8%** de 756 linhas (Api 97,5 · Application 100 · Domain 98,2 · Infrastructure 99,4) |
-| Mutações manuais (quebrar de propósito e ver o teste falhar) | 5 execuções, todas detectadas: trava de concorrência, ordenação cronológica, tradução de erro de unicidade, documentação (2 alterações de uma vez: um 409 e um resumo removidos) e vazamento de mensagem no 500 |
+| Suíte final em Release com `-warnaserror` | 74 unitários + 80 de integração, todos passando |
+| Cobertura de linhas (unitários + integração somados, sem código gerado: migrations e regex gerado) | **98,9%** de 703 linhas (Api 98,0 · Application 100 · Domain 98,0 · Infrastructure 99,3). Contando o regex gerado: 93,5% de 1003 linhas |
+| Mutações manuais (quebrar de propósito e ver o teste falhar) | 6 execuções, todas detectadas: trava de concorrência, ordenação cronológica, tradução de erro de unicidade, documentação (2 alterações de uma vez), vazamento de mensagem no 500 e Sentry (limpador de segredos e filtro de exceção removidos de uma vez) |
 | Segredos versionados | nenhum (`.env` ignorado; `.env.example` sem segredos reais) |
 
 **Sobre a cobertura:** o número mostra o que foi *executado*, não o que seria *percebido* se estivesse errado. Por isso as mutações importam mais. As linhas sem cobertura são: cancelamento pelo cliente no tratador de erros, a falha `Fatal` de inicialização e o ramo `throw;` de erros de banco desconhecidos.
@@ -79,6 +79,9 @@ Legenda: ✅ atendido e verificado · 🟡 parcial ou preparado, mas não exerci
 2. **O caminho do erro 500 não tinha teste automatizado**, e é onde mora a garantia de não vazar mensagens internas. Agora há teste, com mutação comprovando que ele detecta o vazamento.
 3. **Migrations na subida, FK e unicidade eram verificadas só à mão**: agora têm teste.
 4. **Documentos desatualizados**: README com contagem antiga de testes; `04-arquitetura.md` citava FluentAssertions (nunca usado); o `PROGRESSO.md` prometia branches e PRs que não existiram.
+
+## 5b. Extensão pós-revisão: rastreamento de erros (Sentry)
+Integração opcional, desligada sem DSN ([ADR 0006](adr/0006-rastreamento-de-erros-com-sentry.md)). O que os testes revelaram, contrariando suposições minhas: (1) o SDK **lança exceção na inicialização se o DSN for nulo**, o que derrubaria a API em desenvolvimento, CI e `docker compose`; (2) ele **captura até os 404/409/422** tratados pelo nosso handler (corrigido com filtros); (3) o meu limpador de segredos **deixava vazar tokens `Bearer`** (corrigido; visto falhando antes). **Não verificado:** entrega real ao Sentry.
 
 ## 6. Limitações conhecidas
 

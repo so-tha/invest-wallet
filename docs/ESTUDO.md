@@ -16,9 +16,9 @@ Leia em voz alta, com as suas palavras, até soar natural. Todos os números aba
 >
 > A arquitetura tem **quatro camadas**, com as dependências apontando para o núcleo, então as regras são testadas sem banco. Cuidei também do que acontece quando algo dá errado: erros no formato **ProblemDetails** com 400, 404, 409 e 422 bem distintos, e um **traceId** em cada resposta que leva direto aos **logs estruturados** em JSON.
 >
-> São **133 testes**, unitários e de integração contra um PostgreSQL real em Docker, com **98,8% de cobertura de linhas**. Para saber se os testes realmente protegem, eu **quebrei o código de propósito** e confirmei que eles falham.
+> São **154 testes**, unitários e de integração contra um PostgreSQL real em Docker, com **98,9% de cobertura de linhas** (sem código gerado). Para saber se os testes realmente protegem, eu **quebrei o código de propósito** e confirmei que eles falham.
 >
-> Roda com um `docker compose up`, tem Swagger completo e um pipeline de **CI no GitHub Actions** que escrevi e executei localmente, mas ainda preciso ver rodando no GitHub. O que falta é o **frontend em React com testes Playwright** e a **integração com LLM**; são os meus próximos passos.
+> Os erros 500 podem ir para o **Sentry** (integração opcional, com limpeza de segredos). Roda com um `docker compose up`, tem Swagger completo e um pipeline de **CI no GitHub Actions** que escrevi e executei localmente, mas ainda preciso ver rodando no GitHub. O que falta é o **frontend em React com testes Playwright** e a **integração com LLM**; são os meus próximos passos.
 
 ### O projeto em uma tabela
 | Área | O que usei | Por quê |
@@ -166,11 +166,20 @@ Veja a resposta-guia na P37: ela usa os erros reais do projeto.
 ### P35. Qual a diferença entre liveness e readiness? 🟢 (revisão final)
 **Resposta-guia:** *Liveness* (`/health`) pergunta "o processo está de pé?" e não consulta nada; se falhar, o orquestrador **reinicia** o container. *Readiness* (`/health/ready`) pergunta "consigo atender requisições agora?" e inclui as dependências (o banco); se falhar, o orquestrador **para de enviar tráfego**, mas não reinicia. Misturar os dois é perigoso: se a liveness consultasse o banco, uma queda do banco faria o orquestrador reiniciar todas as réplicas em loop, sem resolver nada. Verifiquei com o banco realmente parado: `/health` 200 e `/health/ready` 503. E há uma lição: na etapa 2 o meu `/health` não detectou um bug de configuração do banco justamente por ser só liveness; só separei na revisão final.
 
-### P36. Sua cobertura é de 98,8%. Isso prova que o código está correto? 🟢 (revisão final)
+### P36. Sua cobertura é de 98,9%. Isso prova que o código está correto? 🟢 (revisão final)
 **Resposta-guia:** Não. Cobertura mede quais linhas foram **executadas** pelos testes, não se algum teste **perceberia** um defeito ali. Um teste sem asserções dá 100% de cobertura. Por isso complementei com **testes de mutação manuais**: quebrei de propósito a trava de concorrência, a ordenação, a tradução de erros, a documentação e a proteção contra vazamento no 500, e confirmei que um teste falhava em cada caso. E o número só ajudou a achar lacunas reais: ao medir (92,4%), vi que o caminho do erro 500 e a migration na subida nunca tinham sido testados automaticamente. As linhas que sobraram sem cobertura são conhecidas e justificáveis (cancelamento pelo cliente, falha fatal de inicialização).
 
 ### P37. Se você começasse o projeto de novo, o que faria diferente? 🟢 (revisão final)
 **Resposta-guia:** Cinco coisas, todas vindas de erros reais: (1) **trabalhar por branches e Pull Requests desde o início**: commitei direto na `main`, então o fluxo de code review ficou só preparado (template e CI), não exercitado; (2) **publicar no GitHub e ter o CI rodando desde a primeira etapa**: o meu workflow só foi validado localmente; (3) ligar o `-warnaserror` desde o começo (ele só apareceu na etapa 9 e pegou um construtor obsoleto); (4) **fixar versões de pacotes** desde o início (deixei `8.*` flutuante três vezes); (5) ter a *readiness* com consulta ao banco desde o primeiro dia. Mostrar que você aprende com os próprios erros pesa mais do que afirmar que acertou tudo.
+
+### P38. Por que Sentry em vez de integrar com o Jira por conta própria? (construir × comprar) 🟢 (extensão)
+**Resposta-guia:** Alertar sobre erros envolve agrupar erros iguais, deduplicar, controlar frequência, notificar e acompanhar regressões; o Sentry já faz isso. Construir um integrador próprio é um bom exercício (fila em memória, `BackgroundService`, deduplicação por impressão digital, resiliência), mas em produção eu avaliaria primeiro a ferramenta pronta, cujo custo é dinheiro e dados saindo do sistema. Fiz a escolha consciente: adotei o Sentry (opcional, desligado por padrão) e deixei o adaptador próprio como extensão possível. Detalhe de custo: o plano gratuito é limitado e, pela página do Sentry, a sincronização com o Jira é do plano pago (Team).
+
+### P39. O que você envia para um serviço externo de erros, e o que não envia? 🟢 (extensão)
+**Resposta-guia:** O evento leva stack trace e a **mensagem da exceção**, o que é arriscado: mensagens às vezes carregam trechos sensíveis (`Password=...` numa connection string). Defesas: (1) só erros 500; (2) `SendDefaultPii=false`, sem corpo de requisição, sem cookies nem cabeçalhos de autenticação nem IP; (3) um limpador de segredos que roda antes do envio, coberto por testes; (4) a regra de não colocar segredos em mensagens de exceção, porque o limpador é só uma rede de segurança. Um teste que escrevi antes de corrigir o limpador mostrou que `Authorization: Bearer abc` deixava o token vazar (só a palavra `Bearer` era removida).
+
+### P40. Como você testa a integração com um serviço externo sem acessar a rede? 🟢 (extensão)
+**Resposta-guia:** Troco a borda de saída. Com um DSN falso só para ativar o SDK, um transporte que descarta tudo e um `BeforeSend` que registra os eventos que *seriam* enviados, os testes verificam o que sai (um evento por 500, com a tag `trace_id`), o que não sai (nenhum evento em 400/404/409/422, nenhum segredo, nenhum cabeçalho de autenticação) e que sem DSN nada é ativado. O que **não** se prova assim é a entrega real, e é honesto dizer isso. Cuidado conhecido: o `SentrySdk` é estado estático global, então testes não devem depender de "o SDK está ativado/desativado" de forma dependente da ordem de execução.
 
 *(Novas perguntas serão adicionadas a cada etapa.)*
 
@@ -318,6 +327,17 @@ Veja a resposta-guia na P37: ela usa os erros reais do projeto.
 - **Verificação em ambiente limpo (*clean room*):** clonar o repositório do zero e seguir só o README, para provar que nada depende de arquivos locais não versionados.
 - **Revisar números contra os fatos:** conferi cada afirmação do documento (contagem de testes, de mutações, de commits) contra a medição; duas estavam erradas.
 
+### Extensão: rastreamento de erros (Sentry)
+- **DSN:** o endereço do seu projeto no Sentry (identifica onde enviar). Não é senha, mas pertence à configuração do ambiente, não ao repositório.
+- **SDK com `UseSentry`:** captura exceções, anexa contexto da requisição e envia em segundo plano.
+- **`ISentryEventProcessor`:** transforma o evento antes do envio (usei para limpar segredos). Roda antes do `BeforeSend`.
+- **`BeforeSend`:** último gancho antes de enviar; devolver `null` descarta o evento. Nos testes, registra e descarta.
+- **`AddExceptionFilterForType<T>()`:** não envia exceções daquele tipo (e derivados).
+- **Tags no escopo:** `scope.SetTag("trace_id", ...)` liga o evento ao log e à resposta de erro.
+- **Estado estático global:** `SentrySdk` é global ao processo; em testes, o último host a inicializá-lo vence.
+- **`[GeneratedRegex]` (source generator):** o compilador gera o código do regex em tempo de build (mais rápido e sem custo de montagem em execução). O arquivo gerado conta como "linhas" na cobertura, por isso medi com e sem ele.
+- **Fail-fast da configuração:** o SDK lança erro com DSN nulo; é melhor falhar na inicialização do que silenciosamente, mas é preciso saber disso para não derrubar a aplicação em ambientes sem DSN.
+
 *(Novos conceitos serão adicionados a cada etapa.)*
 
 ---
@@ -354,6 +374,9 @@ Veja a resposta-guia na P37: ela usa os erros reais do projeto.
 - Rodei localmente `dotnet build -c Release -warnaserror` (o que o CI vai rodar) e ele revelou um warning que o build normal escondia: o construtor sem parâmetros do `PostgreSqlBuilder` estava obsoleto. Sem esse ensaio, o primeiro CI no GitHub falharia. Lição: execute localmente exatamente o que o pipeline executa.
 - Para testar a migration num banco vazio sem tocar nos dados de desenvolvimento, criei um banco temporário (`iw_smoke`) no mesmo servidor, apontei o container para ele e o apaguei no final.
 - A senha do banco fica visível na connection string do container (`docker inspect`). É aceitável em desenvolvimento e está no README como limitação; em produção, segredos vêm de um gerenciador.
+- **O SDK do Sentry derrubaria a aplicação em todos os ambientes sem DSN** (lança exceção na inicialização) e **capturava até os 404/409/422**. Eu havia suposto o contrário em ambos os casos; só os testes mostraram. Lição: não confie na suposição sobre o comportamento de uma biblioteca; escreva o teste que o prova.
+- **O limpador de segredos vazava tokens `Bearer`**: um teste escrito *antes* da correção (e visto falhando) mostrou o defeito, que o teste de integração (só `Password=...`) não pegaria.
+- **A cobertura caiu de 98,8% para 84% de repente**: o motivo era o arquivo gerado do `[GeneratedRegex]`, não código meu sem teste. Excluí o código gerado da medição (como as migrations) e **mostrei os dois números**, em vez de escolher o melhor.
 - **Documentos que mentiam:** o `PROGRESSO.md` prometia "branches + PRs por etapa", mas tudo foi para a `main`; o `docs/04` citava uma biblioteca de testes (FluentAssertions) que eu nunca usei; o README tinha contagens antigas de testes. Só achei ao fazer a revisão final, cruzando cada afirmação com o repositório. Lição: documentação é código; precisa ser revisada.
 - **Minhas próprias contagens estavam erradas** na primeira versão da revisão ("7 de 7 mutações", cobertura medida *antes* dos últimos testes). Corrigi ao conferir contra a medição. Lição: um número que você não mediu agora é uma suposição.
 - Repeti o erro do `pkill -f`: usei `pgrep -f "InvestWallet.Api.dll"` num laço com `kill`, e ele também casou com o shell que rodava o comando (a linha de comando continha o texto), que foi encerrado (código 144). Lição: para achar um processo, use a porta (`ss -ltnp 'sport = :5265'`) ou guarde o PID ao iniciar. Além disso, `wait %2 %3...` esperou jobs errados; o correto é guardar os PIDs em um array e fazer `wait $PIDS`.

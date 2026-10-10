@@ -109,7 +109,7 @@ src/
   InvestWallet.Api/             controllers, tratamento de erros, Swagger, Serilog
 tests/
   InvestWallet.UnitTests/         74 testes, sem banco
-  InvestWallet.IntegrationTests/  59 testes: API real + PostgreSQL descartável
+  InvestWallet.IntegrationTests/  80 testes: API real + PostgreSQL descartável
 docs/                           requisitos, modelo de dados, endpoints, ADRs, guia de estudo
 ```
 
@@ -119,6 +119,7 @@ docs/                           requisitos, modelo de dados, endpoints, ADRs, gu
 3. [Concorrência com advisory lock do PostgreSQL](docs/adr/0003-concorrencia-com-advisory-lock.md)
 4. [Migrations aplicadas na subida, atrás de uma flag](docs/adr/0004-migrations-na-subida-da-aplicacao.md)
 5. [Convenção de códigos de erro HTTP](docs/adr/0005-codigos-de-erro-http.md)
+6. [Rastreamento de erros com Sentry (opcional)](docs/adr/0006-rastreamento-de-erros-com-sentry.md)
 
 ## Testes
 ```bash
@@ -129,7 +130,7 @@ dotnet test tests/InvestWallet.IntegrationTests  # sobem um PostgreSQL descartá
 - Os testes de integração **não** usam o banco do `docker compose`: cada execução cria e destrói o próprio container, com as migrations reais.
 - Cobrem fluxos completos, formato de erro, paginação, fusos horários e **corridas reais** (8 vendas simultâneas sobre saldo 20: exatamente 2 passam; 8 criações do mesmo ticker: 1 criada, 7 conflitos).
 - Há testes de **contrato** sobre o `swagger.json`: o documento é válido, expõe exatamente os endpoints planejados e documenta todas as respostas, então a documentação não envelhece em silêncio.
-- Cobertura de linhas medida: **98,8%** (somando as duas suítes, sem as migrations geradas). Como cobertura só mostra o que foi *executado*, a eficácia dos testes foi verificada quebrando proteções de propósito (trava de concorrência, ordenação cronológica, tradução de erros, documentação, vazamento no 500) e confirmando que os testes certos falham.
+- Cobertura de linhas medida: **98,9%** (somando as duas suítes, sem código gerado: migrations e o regex gerado pelo compilador; com o regex gerado incluído, 93,5%). Como cobertura só mostra o que foi *executado*, a eficácia dos testes foi verificada quebrando proteções de propósito (trava de concorrência, ordenação cronológica, tradução de erros, documentação, vazamento no 500) e confirmando que os testes certos falham.
 
 ## CI (GitHub Actions)
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda a cada push/PR para `main`:
@@ -141,12 +142,26 @@ dotnet test tests/InvestWallet.IntegrationTests  # sobem um PostgreSQL descartá
 - **Demais ambientes (inclusive o container):** JSON, um evento por linha, pronto para coleta.
 - Nunca são registrados corpos de requisição nem valores de parâmetros SQL.
 
+## Rastreamento de erros (Sentry, opcional)
+Desligado por padrão: sem DSN, nada sai da aplicação. Para ativar, crie um projeto gratuito no [Sentry](https://sentry.io) e coloque o DSN no seu `.env` (ignorado pelo Git):
+```bash
+SENTRY_DSN=https://<chave>@o<n>.ingest.sentry.io/<n>
+docker compose up --build                       # o compose repassa SENTRY_DSN para a API
+# ou, rodando a API localmente:  Sentry__Dsn="$SENTRY_DSN" dotnet run --project src/InvestWallet.Api
+```
+Para ver um erro chegar: `docker compose stop db`, chame `GET /api/wallets` (resposta 500) e depois `docker compose start db`. O evento no Sentry traz a tag `trace_id`, a mesma do log e da resposta.
+
+- **Só erros 500** vão para o Sentry; 400, 404, 409 e 422 são comportamento esperado e ficam de fora.
+- **Não vão:** corpo de requisição, cookies, cabeçalhos de autenticação, IP. Trechos como `Password=...` ou `Authorization: Bearer ...` em mensagens de exceção são removidos antes do envio.
+- O comportamento é coberto por testes **sem rede** (transporte simulado). A entrega real ao Sentry depende do seu DSN e não é testada no CI. Decisão em [ADR 0006](docs/adr/0006-rastreamento-de-erros-com-sentry.md).
+
 ## Configuração
 | Variável | Para quê | Padrão |
 |---|---|---|
 | `ConnectionStrings__Default` | Conexão com o PostgreSQL | (obrigatória) |
 | `Database__MigrateOnStartup` | Aplica migrations ao subir | `false` (o compose liga) |
 | `Swagger__Enabled` | Expõe o Swagger fora de Development | `false` (o compose liga) |
+| `Sentry__Dsn` (no compose: `SENTRY_DSN`) | Ativa o rastreamento de erros no Sentry | vazio = desativado |
 
 ## Limitações conhecidas e próximos passos
 - **Sem HTTPS, CORS e rate limiting** configurados (esperado atrás de um proxy/ingress; necessários para uso real e para um frontend).
