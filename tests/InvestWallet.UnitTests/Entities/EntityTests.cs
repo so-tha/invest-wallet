@@ -45,6 +45,30 @@ public class WalletTests
     }
 }
 
+public class DomainGuardTests
+{
+    // Os validadores da borda barram estes casos antes (400); estes testes provam a "última defesa" do domínio.
+    [Fact]
+    public void Carteira_recusa_nome_e_descricao_acima_do_limite()
+    {
+        Assert.Throws<DomainException>(() => new Wallet(new string('a', Wallet.NameMaxLength + 1), null));
+        Assert.Throws<DomainException>(() => new Wallet("ok", new string('b', Wallet.DescriptionMaxLength + 1)));
+    }
+
+    [Fact]
+    public void Ativo_recusa_nome_acima_do_limite()
+    {
+        Assert.Throws<DomainException>(() => new Asset("OK1", new string('a', Asset.NameMaxLength + 1), AssetType.Etf));
+    }
+
+    [Fact]
+    public void Transacao_recusa_tipo_inexistente()
+    {
+        Assert.Throws<DomainException>(() =>
+            new Transaction(Guid.NewGuid(), Guid.NewGuid(), (TransactionType)99, 1, 1, DateTime.UtcNow));
+    }
+}
+
 public class AssetTests
 {
     [Fact]
